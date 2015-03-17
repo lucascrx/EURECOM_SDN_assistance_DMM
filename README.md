@@ -2,10 +2,14 @@
 
 Eurecom Semester Project SPRING 2015
 
-Miscelaneous (drafts of) implementations of SDN controlers at least
+Miscellaneous (drafts of) implementations of SDN controllers at least
 under OpenDayLight Framework. The final idea is to get an
-implementation allowing Distributed Mobility Managment within the
+implementation allowing Distributed Mobility Management within the
 network.
 
 Documentation about Distributed Mobility Management and Software
 defined Networking
+
+As DMM is still nowadays not normalized, we can think to our own way
+to implement it, the folder called "reflection" is where you can
+commit your ideas/question/comments... about DMM procedure
