@@ -11,23 +11,23 @@ controller, flattened below:
 
 	    +----+       +-------+	           
 	    | CN |-------| CN-GW |
-	    +----+	 +-------+
-	    		    |
-			    |
+	    +----+       +-------+
+	                     |
+                             |
      +----------------------------------+
-     |					|
-     |	    SDN MANAGED NETWORK		|									|
-     |	    				|
+     |			                |
+     |	    SDN MANAGED NETWORK	        |									|
+     |	    			        |
      +----------------------------------+
-	|			|
-	|			|
+        |                       |
+        |                       |
      +------+	            +-------+
      | GW-1 |	    	    | GW-2  |
      +------+	     	    +-------+
      			
-	+----+
-	| MN |   ------------>
-	+----+
+        +----+
+        | MN |   ------------>
+        +----+
 
 The MN (Mobile Node) is involved in a communication with CN
 (Correspondent Node) through a SDN controlled network, (SDN controller
