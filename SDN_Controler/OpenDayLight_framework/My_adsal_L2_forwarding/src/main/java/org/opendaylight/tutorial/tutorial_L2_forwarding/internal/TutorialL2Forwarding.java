@@ -15,6 +15,8 @@
  *
  */
 
+
+
 package org.opendaylight.tutorial.tutorial_L2_forwarding.internal;
 
 import java.net.InetAddress;
@@ -228,7 +230,7 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                 }
                 
                 
-                /**********/
+                /*********test commit*/
                 
                 inPkt.setOutgoingNodeConnector(outgoing_connector);
                 this.dataPacketService.transmitDataPacket(inPkt);
