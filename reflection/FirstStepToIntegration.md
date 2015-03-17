@@ -13,11 +13,11 @@ controller, flattened below:
 	    | CN |-------| CN-GW |
 	    +----+       +-------+
 	                     |
-                             |
+	                     |
      +----------------------------------+
-     |			                |
-     |	    SDN MANAGED NETWORK	        |									|
-     |	    			        |
+     |		                        |
+     |	    SDN MANAGED NETWORK	        |									
+     |	    		                |
      +----------------------------------+
         |                       |
         |                       |
