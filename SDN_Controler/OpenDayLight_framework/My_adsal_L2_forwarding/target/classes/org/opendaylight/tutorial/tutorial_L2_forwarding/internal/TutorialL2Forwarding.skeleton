@@ -46,6 +46,7 @@ import org.opendaylight.controller.sal.flowprogrammer.Flow;
 import org.opendaylight.controller.sal.packet.ARP;
 import org.opendaylight.controller.sal.packet.BitBufferHelper;
 import org.opendaylight.controller.sal.packet.Ethernet;
+import org.opendaylight.controller.sal.packet.ICMP;
 import org.opendaylight.controller.sal.packet.IDataPacketService;
 import org.opendaylight.controller.sal.packet.IListenDataPacket;
 import org.opendaylight.controller.sal.packet.Packet;
@@ -69,8 +70,8 @@ public class TutorialL2Forwarding implements IListenDataPacket {
     private ISwitchManager switchManager = null;
     private IFlowProgrammerService programmer = null;
     private IDataPacketService dataPacketService = null;
-    private Map<Node, Map<Long, NodeConnector>> mac_to_port_per_switch = new HashMap<Node, Map<Long, NodeConnector>>();
-    private String function = "switch";
+    private Map<Long, NodeConnector> mac_to_port = new HashMap<Long, NodeConnector>();
+    private String function = "hub";
 
     void setDataPacketService(IDataPacketService s) {
         this.dataPacketService = s;
@@ -175,69 +176,65 @@ public class TutorialL2Forwarding implements IListenDataPacket {
         }
     }
 
+
+
     @Override
     public PacketResult receiveDataPacket(RawPacket inPkt) {
         if (inPkt == null) {
             return PacketResult.IGNORED;
         }
-        logger.trace("Received a frame of size: {}",
-                        inPkt.getPacketData().length);
 
-        Packet formattedPak = this.dataPacketService.decodeDataPacket(inPkt);
         NodeConnector incoming_connector = inPkt.getIncomingNodeConnector();
         Node incoming_node = incoming_connector.getNode();
 
-        if (formattedPak instanceof Ethernet) {
-            byte[] srcMAC = ((Ethernet)formattedPak).getSourceMACAddress();
-            byte[] dstMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
+        // Hub implementation
+        if (function.equals("hub")) {
+            floodPacket(inPkt);
+        } else {
+            NodeConnector dst_connector = null;
+
+            // Extract packet from inPkt
+            // Packet formattedPak = this.dataPacketService.decodeDataPacket(inPkt);
+
+            // if (!(formattedPak instanceof Ethernet)) {
+            //    return PacketResult.IGNORED;
+
+            // Extract switch and port information (incoming_connector)
+
+            // Extract packet srcMAC and dstMAC using getSourceMACAddress() and
+            // getDestinationMACAddress() of Ethernet class, and
+            // convert to hex long we can use through BitBufferHelper
+
+            // Store srcMAC and incoming_connector in the mapping dictionary
             
+            // Do I know the destination MAC? Lookup dstMAC in dictionary
 
-            // Hub implementation
-            if (function.equals("hub")) {
+            // If found, generate match and action for the flow, and program a
+            // flow rule in switch
+            if (dst_connector != null) {
+
+                // List<Action> actions = new ArrayList<Action>();
+                // actions.add(new Output(dst_connector));
+
+                // Match match = new Match();
+                // match.setField( new MatchField(MatchType.IN_PORT, incoming_connector) );
+                // match.setField( new MatchField(MatchType.DL_DST, dstMAC.clone()) );
+
+                // Flow f = new Flow(match, actions);
+
+                // Modify the flow on the network node
+                // Status status = programmer.addFlow(incoming_node, f);
+                // if (!status.isSuccess()) {
+                //     logger.warn("SDN Plugin failed to program the flow: {}. The failure is: {}",
+                //                  f, status.getDescription());
+                //     return PacketResult.IGNORED;
+                // }
+                // logger.info("Installed flow {} in node {}", f, incoming_node);
+            } else
                 floodPacket(inPkt);
-                return PacketResult.CONSUME;
-            }
-
-            // Switch
-            else {
-                long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
-                long dstMAC_val = BitBufferHelper.toNumber(dstMAC);
-
-                Match match = new Match();
-                match.setField( new MatchField(MatchType.IN_PORT, incoming_connector) );
-                match.setField( new MatchField(MatchType.DL_DST, dstMAC.clone()) );
-
-                // Set up the mapping: switch -> src MAC address -> incoming port
-                if (this.mac_to_port_per_switch.get(incoming_node) == null) {
-                    this.mac_to_port_per_switch.put(incoming_node, new HashMap<Long, NodeConnector>());
-                }
-                this.mac_to_port_per_switch.get(incoming_node).put(srcMAC_val, incoming_connector);
-
-                NodeConnector dst_connector = this.mac_to_port_per_switch.get(incoming_node).get(dstMAC_val);
-
-                // Do I know the destination MAC?
-                if (dst_connector != null) {
-
-                    List<Action> actions = new ArrayList<Action>();
-                    actions.add(new Output(dst_connector));
-
-                    Flow f = new Flow(match, actions);
-
-                    // Modify the flow on the network node
-                    Status status = programmer.addFlow(incoming_node, f);
-                    if (!status.isSuccess()) {
-                        logger.warn(
-                                "SDN Plugin failed to program the flow: {}. The failure is: {}",
-                                f, status.getDescription());
-                        return PacketResult.IGNORED;
-                    }
-                    logger.info("Installed flow {} in node {}",
-                            f, incoming_node);
-                }
-                else 
-                    floodPacket(inPkt);
             }
         }
-        return PacketResult.IGNORED;
+        return PacketResult.CONSUME;
     }
+
 }
