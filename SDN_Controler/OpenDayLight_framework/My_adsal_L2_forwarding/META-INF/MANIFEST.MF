@@ -1,5 +1,5 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1427191371513
+Bnd-LastModified: 1427563123600
 Build-Jdk: 1.8.0_25
 Built-By: ubuntu
 Bundle-Activator: org.opendaylight.tutorial.tutorial_L2_forwarding.inter
