@@ -67,27 +67,40 @@ import org.opendaylight.controller.sal.utils.NetUtils;
 import org.opendaylight.controller.switchmanager.ISwitchManager;
 import org.opendaylight.controller.switchmanager.Subnet;
 
-
-
-
-
-
+/**
+ * Implementation of a router controller
+ * currently need a sub-domain discovery protocol
+ */
 public class TutorialL2Forwarding implements IListenDataPacket {
     private static final Logger logger = LoggerFactory
             .getLogger(TutorialL2Forwarding.class);
     private ISwitchManager switchManager = null;
     private IFlowProgrammerService programmer = null;
     private IDataPacketService dataPacketService = null;
+    
+    /**
+     * Learning router : route entries are created at the reception of a packet with a new source
+     * IP address. Each router possesses it's own table. 
+     * TODO it would be better to implement a route discovery solution that enable CIDR address
+     * factorization. 
+     */
     private Map<Node, Map<InetAddress, NodeConnector>> ip_to_port_per_switch = new HashMap<Node, Map<InetAddress, NodeConnector>>();
-    //router sees all the nodes as directly linked to him, the MAC address is in fact
-    //the one of the next hop.
+    /**
+     * Each Router will construct it's own ARP table, 
+     * As it's not possible to link MAC & IP addresses to interfaces, routers has to learn from
+     * the received messages what is the addresses affected to each of its interfaces
+     * local @ : local MAC @
+     * dest @ : MAC @ of the next hop on the current interface (the one associated to the IP @)
+     */
     private Map<Node, Map<InetAddress, byte[][]>> ip_to_mac_destANDlocal = new HashMap<Node, Map <InetAddress, byte[][]>>();
     
     private String function = "router";
-   // private Map<InetAddress, NodeConnector> ip_to_port = new HashMap<InetAddress, NodeConnector>();
     
-    
-    //MAC & IP ADRESSES ASSIGNEMENT use 
+    /**
+     * MAC & IP ADRESSES ASSIGNEMENT 
+     * TODO : handle the case where there are SEVERAL routers to handle (HashMap with Nodes as keys)
+     * with an unspecified number of interfaces.
+     * */ 
     
     private final byte[] hw_eth1_router = {0,0,0,0,0,0x03};
     private final String ip_eth1_router = "10.0.1.1";
@@ -145,7 +158,6 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                 }   
             }   
         } 
-        //TODO filling IP_to_port table
         
  
     }
@@ -200,6 +212,10 @@ public class TutorialL2Forwarding implements IListenDataPacket {
     }
 
     @Override
+    /**
+     * This is the only modified function of the class
+     * Handle packet reception.
+     */
     public PacketResult receiveDataPacket(RawPacket inPkt) {
         if (inPkt == null) {
             return PacketResult.IGNORED;
@@ -209,13 +225,15 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                         inPkt.getPacketData().length);
         
         Packet formattedPak = this.dataPacketService.decodeDataPacket(inPkt);
+        //Retrieving input interface
         NodeConnector incoming_connector = inPkt.getIncomingNodeConnector();
         Node incoming_node = incoming_connector.getNode();
         
         System.out.println("Received a frame of size:" +
                 inPkt.getPacketData().length + " on interface "+incoming_connector.toString());
-        
+        //Ethernet Frame
         if (formattedPak instanceof Ethernet) {
+        	//Extracting addresses
         	byte[] srcMAC = ((Ethernet)formattedPak).getSourceMACAddress();
             byte[] dstMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
             long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
@@ -225,8 +243,10 @@ public class TutorialL2Forwarding implements IListenDataPacket {
             
             
             try {
+            	//payload of the frame
             	String class_pck = nextPak.getClass().toString();
-	             System.out.println("Type of the received packet : __"+class_pck+"__");   
+	             System.out.println("Type of the received packet : "+class_pck);
+	             //ARP message
                 if (nextPak instanceof ARP) {
 	            	 	ARP arpPak = (ARP) nextPak;	            
                         byte[] senderProtAddr = arpPak.getSenderProtocolAddress();
@@ -246,7 +266,6 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                             byte[] mac_eth2 = this.hw_eth2_router.clone();
                             
                             //ASKING FOR ip_eth1
-                            
                             if (arpTargetIP.equals(ip_eth1)) {
                                 sendARPReply(incoming_connector, mac_eth1, ip_eth1, senderHwAddr, arpSenderIP);
                                 return PacketResult.CONSUME;
@@ -259,21 +278,21 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                             }
                         } catch (UnknownHostException e) {
                         	//TODO
-                        	System.out.println("aie!"+e.getMessage()+" ---- "+e.getLocalizedMessage());
+                        	System.out.println(e.getMessage());
                         
                         }                			
                 	}
                 	
-                	//CASE 1 : IP PACKET
+                	//IP PACKET
                 	if (nextPak instanceof IPv4) {
 						InetAddress srcIP;
-						
+						//extracting addresses
 						srcIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getSourceAddress()));
 	                	InetAddress dstIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getDestinationAddress()));
 						
 	                	System.out.println("IP packet received from " + srcIP.toString() + " to : " + dstIP.toString() +"on port " + incoming_connector + "  @  " + incoming_node +" Ethertype : "+((Ethernet)formattedPak).getEtherType() );
 	                	
-	                	//1 hop routing : learning
+	                	//learning
 	                	
 	                	//TABLES INITIALISATION : 1st packet received
 	                    if (this.ip_to_port_per_switch.get(incoming_node) == null) {
@@ -283,19 +302,20 @@ public class TutorialL2Forwarding implements IListenDataPacket {
 	                         this.ip_to_mac_destANDlocal.put(incoming_node, new HashMap<InetAddress, byte[][]>());  
 	                    }
 	            
-	                    //Filling tables
+	                    //Filling tables : 		
 	                    if ( (this.ip_to_port_per_switch.get(incoming_node).put(srcIP, incoming_connector)) == null){
 	                    	System.out.println("new entry in the table for IP = "+srcIP);
 	                    }
-	                    //update if already existing
+	                    //update if already existing, way to learn the addresses of an interfaces
 	                    byte[][] mac_destANDlocal = {srcMAC,dstMAC};
 	                    this.ip_to_mac_destANDlocal.get(incoming_node).put(srcIP, mac_destANDlocal);
 	                    
 	                    
-	                	//forwarding
+	                	//forwarding packet
+	                    //checking if the route to the destination is known.
 	                    NodeConnector dst_connector = this.ip_to_port_per_switch.get(incoming_node).get(dstIP);
 	                    byte[][] resolved_macs = this.ip_to_mac_destANDlocal.get(incoming_node).get(dstIP);
-	                    //is a interface set for the @IP dest
+	                    //if there is an output : defining new flow
 	                    if (dst_connector != null && resolved_macs != null) {
 	                    	System.out.println("IP packet must be transmitted on : " + dst_connector + " @ " + incoming_node);
 	                    	//defining the match
@@ -303,6 +323,7 @@ public class TutorialL2Forwarding implements IListenDataPacket {
 	                    	match.setField(MatchType.DL_TYPE, (short) 0x0800);
 	                    	match.setField(MatchType.IN_PORT, incoming_connector);
 	                        match.setField(MatchType.NW_DST, dstIP);
+	                        //defining actions
 	                        List<Action> actions = new ArrayList<Action>();
 	                        //defining new dest MAC addr
 	                        actions.add(new SetDlDst(resolved_macs[0]));
@@ -311,7 +332,6 @@ public class TutorialL2Forwarding implements IListenDataPacket {
 	                        //defining output interface
 	                        actions.add(new Output(dst_connector));
 	             
-	                        
 	                        Flow f = new Flow(match, actions);
 	                        f.setPriority((short)512);
 	                        Status status = programmer.addFlow(incoming_node, f);
@@ -340,7 +360,7 @@ public class TutorialL2Forwarding implements IListenDataPacket {
     
  
     
-    ////ARP HANDLING//////
+    //ARP HANDLING
     protected void sendARPReply(NodeConnector p, byte[] sMAC, InetAddress sIP, byte[] tMAC, InetAddress tIP) {
         byte[] senderIP = sIP.getAddress();
         byte[] targetIP = tIP.getAddress();
