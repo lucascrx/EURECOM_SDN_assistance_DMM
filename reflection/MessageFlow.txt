@@ -1,0 +1,99 @@
+Network Based DMM, SDN assisted.
+Message Flow Proposition.
+----------------------------------------------------------------------
+
+1_ MN --[ROUTER SOLICITATION MESSAGE[MN_ID]]--> NMAR1
+
+>The MN sends first a router Solicitation Message tp the covering
+>NMAR, that includes Mn identifier.
+
+2_ NMAR1 --[OPENFLOW_PACKETIN[RS[MN_ID]]] --> SDNC
+
+>NMAR1 transmits the RS just received to the SDN Controller in
+>encapsulating it in a Open Flow, Packet_in message. 
+
+3_ SDNC --[OPENFLOW_ADDFLOW[null]]--> NMAR1
+
+>The SDNC checks into a table : 
+>MN_ID <--> ORIGIN DOMAIN <-->numberOfFlow 
+>to check if the MN comes from a previous domain. Here there is no
+>entry for the given MN_ID so it inserts a new one associated with
+>NMAR1 @IP. As there is no mobility to handle for NMAR1 the flow to
+>add is null, ans the number of flow is initialized to 0.
+
+4_ NMAR1 --[ROUTER ADVERTISEMENT[Prefix_NMAR1]]--> MN
+
+>NMAR1 sends a Router Advertisement from which the MN can configure
+>its IP@:@MN_1
+ 
+5_ MN --[IPV6_PACKET[FROM:@MN_1 TO:@CN]] --> NMAR1
+
+>MN starts a communication with a remote host, using the computed @.
+
+6_ NMAR --[OPENFLOW_PACKETIN[IPV6_PACKET]] --> SDNC
+
+>As this is the first packet of the flow and the NMAR is reactive,
+>it's ask the SDN Controller what to do with it.
+
+7_ SDNC --[OPENFLOW_ADDFLOW[match(@S:@MN_1/@D:@CN)action(FW:ethX)]]-->
+NMAR
+
+SDNC --[OPENFLOW_ADDFLOW[match(@S:@CN/@D:@MN_1)action(FW:ethY)]]-->
+NMAR 
+
+>Like the normal way, the controller compute an algorithm to find the
+>output interface on NMAR1 to conveys the new flow and instructs
+>NMAR1, the controller also increments by 1 the number of flow of the
+>associated entry. TIMER BASED FLOW -> when no matches with this flow
+>after a given time, the entry is removes from NMAR1's flow table. In
+>case of time out NMAR1 sends a OPENFLOW_FLOWREMOVAL that trigger a
+>decrementation of the number of flow of the associated entry in
+>controller's table, only a FLOW_REMOVAL from the CURRENT NMAR
+>involves flow number decrementation.
+
+>Need to set up the flow associated to the reverse path also, or it
+>can be done with an explicit OPENFLOW_PACKETIN request.
+
+OPTION : OPENFLOW_PACKETOUT[IPV6_PACKET] ON ORDER NOT TO LOSE THE
+FIRST PACKET.
+
+8_ MN <----NMAR1---->CN
+
+>ip packets belonging to the new defined flow are switched by NMAR1
+>to MN and CN depending on their direction.
+
+----------------------------------------------------------------------
+		NMAR1----------MN--------->NMAR2
+
+9_ MN --[ROUTER SOLICITATION MESSAGE[MN_ID]]--> NMAR2
+
+>The MN sends first a router Solicitation Message tp the covering
+>NMAR, that includes Mn identifier.
+
+10_ NMAR2 --[OPENFLOW_PACKETIN[RS[MN_ID]]] --> SDNC
+
+>NMAR2 transmits the RS just received to the SDN Controller in
+>encapsulating it in a Open Flow, Packet_in message. 
+  
+11_
+
+>The SDNC check if MN_ID exists in the table and let's suppose that
+ the number of flow is still one, that means mobility have to be
+ handled: The SDN controller asks to the NMAR of MD_IS entry in the
+ table, the flows associated to MN_ID (or @MN_1 can be computed by the
+ controller). once he gets it from the NMAR1 it sends back in a flow
+ modification message exactely the same configuration exept that now
+ the action consists in forwarding in the tunnel toward NMAR2. And for
+ the reverse direction flow the only think that change is a new added
+ flow : for every packet from the tunnel : desencapsualtion then 2nd
+ pass in the flow table : WARNING not possible to set up tunnel in the
+ reverse direction without encapsulation (loss of destination @)
+
+Then the SDN Controller set new flow to NMAR2 : all incomming packets
+with @source : @MN_1, action:  encapsulated in the tunnel, all the
+packets with @dest = @MN_1, action output : localnetwork, and all the
+packets from the tunnel : desencapsulation, then 2 pass in flow table.
+
+Then SDN controller update the table the current NMAR is now NMAR 2.
+
+
