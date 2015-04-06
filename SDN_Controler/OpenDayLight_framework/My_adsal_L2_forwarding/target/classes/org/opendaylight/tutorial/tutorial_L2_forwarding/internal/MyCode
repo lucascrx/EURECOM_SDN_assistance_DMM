@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
@@ -48,6 +47,7 @@ import org.opendaylight.controller.sal.packet.BitBufferHelper;
 import org.opendaylight.controller.sal.packet.Ethernet;
 import org.opendaylight.controller.sal.packet.IDataPacketService;
 import org.opendaylight.controller.sal.packet.IListenDataPacket;
+import org.opendaylight.controller.sal.packet.IPv4;
 import org.opendaylight.controller.sal.packet.Packet;
 import org.opendaylight.controller.sal.packet.PacketResult;
 import org.opendaylight.controller.sal.packet.RawPacket;
@@ -70,7 +70,9 @@ public class TutorialL2Forwarding implements IListenDataPacket {
     private IFlowProgrammerService programmer = null;
     private IDataPacketService dataPacketService = null;
     private Map<Node, Map<Long, NodeConnector>> mac_to_port_per_switch = new HashMap<Node, Map<Long, NodeConnector>>();
-    private String function = "switch";
+    
+    private String function = "router";
+    private Map<InetAddress, Long> ip_to_mac = new HashMap<InetAddress, Long>();
 
     void setDataPacketService(IDataPacketService s) {
         this.dataPacketService = s;
@@ -180,6 +182,8 @@ public class TutorialL2Forwarding implements IListenDataPacket {
         if (inPkt == null) {
             return PacketResult.IGNORED;
         }
+        System.out.println("Received a frame of size:" +
+                inPkt.getPacketData().length);
         logger.trace("Received a frame of size: {}",
                         inPkt.getPacketData().length);
 
@@ -199,7 +203,7 @@ public class TutorialL2Forwarding implements IListenDataPacket {
             }
 
             // Switch
-            else {
+            else if (function.equals("switch")) {
                 long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
                 long dstMAC_val = BitBufferHelper.toNumber(dstMAC);
 
@@ -231,12 +235,43 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                                 f, status.getDescription());
                         return PacketResult.IGNORED;
                     }
+                    System.out.println("Installed flow "+f+" in node " + incoming_node);
                     logger.info("Installed flow {} in node {}",
                             f, incoming_node);
                 }
                 else 
                     floodPacket(inPkt);
             }
+            //Router
+            else if(function.equals("router")){
+            	
+                long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
+                long dstMAC_val = BitBufferHelper.toNumber(dstMAC);
+                    
+                Object nextPak = formattedPak.getPayload();
+                
+                
+	                //CASE 1 : IP PACKET
+                try {
+	                if (nextPak instanceof IPv4) {
+						InetAddress srcIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getSourceAddress()));
+	                	InetAddress dstIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getDestinationAddress()));
+	                	//Storing @MAC <----> @IP
+	                	this.ip_to_mac.put(srcIP, srcMAC_val);
+	                	//Storing @MAC <----> Receiving IF for the current switch
+	                	
+					} 
+	                }catch (UnknownHostException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+           
+            	
+            	
+            	
+            }
+            
+            
         }
         return PacketResult.IGNORED;
     }

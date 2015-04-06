@@ -38,14 +38,15 @@ import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.FrameworkUtil;
 import org.opendaylight.controller.sal.core.ConstructionException;
+import org.opendaylight.controller.sal.core.Host;
 import org.opendaylight.controller.sal.core.Node;
 import org.opendaylight.controller.sal.core.NodeConnector;
+import org.opendaylight.controller.sal.core.Property;
 import org.opendaylight.controller.sal.flowprogrammer.IFlowProgrammerService;
 import org.opendaylight.controller.sal.flowprogrammer.Flow;
 import org.opendaylight.controller.sal.packet.ARP;
 import org.opendaylight.controller.sal.packet.BitBufferHelper;
 import org.opendaylight.controller.sal.packet.Ethernet;
-import org.opendaylight.controller.sal.packet.ICMP;
 import org.opendaylight.controller.sal.packet.IDataPacketService;
 import org.opendaylight.controller.sal.packet.IListenDataPacket;
 import org.opendaylight.controller.sal.packet.IPv4;
@@ -55,6 +56,8 @@ import org.opendaylight.controller.sal.packet.RawPacket;
 import org.opendaylight.controller.sal.action.Action;
 import org.opendaylight.controller.sal.action.Output;
 import org.opendaylight.controller.sal.action.Flood;
+import org.opendaylight.controller.sal.action.SetDlDst;
+import org.opendaylight.controller.sal.action.SetDlSrc;
 import org.opendaylight.controller.sal.match.Match;
 import org.opendaylight.controller.sal.match.MatchType;
 import org.opendaylight.controller.sal.match.MatchField;
@@ -64,15 +67,46 @@ import org.opendaylight.controller.sal.utils.NetUtils;
 import org.opendaylight.controller.switchmanager.ISwitchManager;
 import org.opendaylight.controller.switchmanager.Subnet;
 
+/**
+ * Implementation of a router controller
+ * currently need a sub-domain discovery protocol
+ */
 public class TutorialL2Forwarding implements IListenDataPacket {
     private static final Logger logger = LoggerFactory
             .getLogger(TutorialL2Forwarding.class);
     private ISwitchManager switchManager = null;
     private IFlowProgrammerService programmer = null;
     private IDataPacketService dataPacketService = null;
-    private Map<Long, NodeConnector> mac_to_port = new HashMap<Long, NodeConnector>();
-    private String function = "switch";
-
+    
+    /**
+     * Learning router : route entries are created at the reception of a packet with a new source
+     * IP address. Each router possesses it's own table. 
+     * TODO it would be better to implement a route discovery solution that enable CIDR address
+     * factorization. 
+     */
+    private Map<Node, Map<InetAddress, NodeConnector>> ip_to_port_per_switch = new HashMap<Node, Map<InetAddress, NodeConnector>>();
+    /**
+     * Each Router will construct it's own ARP table, 
+     * As it's not possible to link MAC & IP addresses to interfaces, routers has to learn from
+     * the received messages what is the addresses affected to each of its interfaces
+     * local @ : local MAC @
+     * dest @ : MAC @ of the next hop on the current interface (the one associated to the IP @)
+     */
+    private Map<Node, Map<InetAddress, byte[][]>> ip_to_mac_destANDlocal = new HashMap<Node, Map <InetAddress, byte[][]>>();
+    
+    private String function = "router";
+    
+    /**
+     * MAC & IP ADRESSES ASSIGNEMENT 
+     * TODO : handle the case where there are SEVERAL routers to handle (HashMap with Nodes as keys)
+     * with an unspecified number of interfaces.
+     * */ 
+    
+    private final byte[] hw_eth1_router = {0,0,0,0,0,0x03};
+    private final String ip_eth1_router = "10.0.1.1";
+    private final byte[] hw_eth2_router = {0,0,0,0,0,0x04};
+    private final String ip_eth2_router = "10.0.2.1";
+    
     void setDataPacketService(IDataPacketService s) {
         this.dataPacketService = s;
     }
@@ -123,7 +157,8 @@ public class TutorialL2Forwarding implements IListenDataPacket {
                     logger.error("Exception in Bundle uninstall "+bundle.getSymbolicName(), e); 
                 }   
             }   
-        }   
+        } 
+        
  
     }
 
@@ -176,108 +211,193 @@ public class TutorialL2Forwarding implements IListenDataPacket {
         }
     }
 
-
-
     @Override
+    /**
+     * This is the only modified function of the class
+     * Handle packet reception.
+     */
     public PacketResult receiveDataPacket(RawPacket inPkt) {
         if (inPkt == null) {
             return PacketResult.IGNORED;
         }
 
+        logger.trace("Received a frame of size: {}",
+                        inPkt.getPacketData().length);
+        
+        Packet formattedPak = this.dataPacketService.decodeDataPacket(inPkt);
+        //Retrieving input interface
         NodeConnector incoming_connector = inPkt.getIncomingNodeConnector();
-
-        // Hub implementation
-        if (function.equals("hub")) {
-            floodPacket(inPkt);
-        } else {
-            Packet formattedPak = this.dataPacketService.decodeDataPacket(inPkt);
-            if (!(formattedPak instanceof Ethernet)) {
-                return PacketResult.IGNORED;
-            }
-
-            learnSourceMAC(formattedPak, incoming_connector);
-            NodeConnector outgoing_connector = 
-                knowDestinationMAC(formattedPak);
-
-            if (outgoing_connector == null) {
-                floodPacket(inPkt);
-            } else {
-                if (!programFlow(formattedPak, incoming_connector,
-                            outgoing_connector)) {
-                    return PacketResult.IGNORED;
-                }
-                
-                /**MyCode**/
-                byte[] destMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
-                long destMAC_val = BitBufferHelper.toNumber(destMAC);
-                String nodeStr = outgoing_connector.getNodeConnectorIdAsString();
-                System.out.println("TO : (" + nodeStr + "::" + destMAC_val);
-                System.out.println("----------------------------------------------------");
-                
-                Packet isdPkt = formattedPak.getParent();
-                /*Class cl = isdPkt.getClass();
-                String name_isd = cl.getName();
-                System.out.println("INSIDE : " + name_isd);*/
-                
-                if(isdPkt instanceof IPv4){
-                	System.out.println("IP PACKET INSIDE :");
-                	int srcIPadd = ((IPv4)isdPkt).getSourceAddress();
-                	int dstIPadd = ((IPv4)isdPkt).getDestinationAddress();
-                	System.out.println("FROM " + srcIPadd + " TO " + dstIPadd);
-                	System.out.println("=================================================================");
-                }
-                
-                
-                /**********/
-                
-                inPkt.setOutgoingNodeConnector(outgoing_connector);
-                this.dataPacketService.transmitDataPacket(inPkt);
-            }
-        }
-        return PacketResult.CONSUME;
-    }
-
-    private void learnSourceMAC(Packet formattedPak, NodeConnector incoming_connector) {
-        byte[] srcMAC = ((Ethernet)formattedPak).getSourceMACAddress();
-        long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
-        /**MyCODE**/
-        String nodeStr = incoming_connector.getNodeConnectorIdAsString();
-        System.out.println("NEW FRAME TO TRANSMIT FROM : (" + nodeStr + "::" + srcMAC_val);
-        /**********/
-        this.mac_to_port.put(srcMAC_val, incoming_connector);
-    }
-
-    private NodeConnector knowDestinationMAC(Packet formattedPak) {
-        byte[] dstMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
-        long dstMAC_val = BitBufferHelper.toNumber(dstMAC);
-        return this.mac_to_port.get(dstMAC_val) ;
-    }
-
-    private boolean programFlow(Packet formattedPak, 
-            NodeConnector incoming_connector, 
-            NodeConnector outgoing_connector) {
-        byte[] dstMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
-
-        Match match = new Match();
-        match.setField( new MatchField(MatchType.IN_PORT, incoming_connector) );
-        match.setField( new MatchField(MatchType.DL_DST, dstMAC.clone()) );
-
-        List<Action> actions = new ArrayList<Action>();
-        actions.add(new Output(outgoing_connector));
-
-        Flow f = new Flow(match, actions);
-        f.setIdleTimeout((short)5);
-
-        // Modify the flow on the network node
         Node incoming_node = incoming_connector.getNode();
-        Status status = programmer.addFlow(incoming_node, f);
+        
+        System.out.println("Received a frame of size:" +
+                inPkt.getPacketData().length + " on interface "+incoming_connector.toString());
+        //Ethernet Frame
+        if (formattedPak instanceof Ethernet) {
+        	//Extracting addresses
+        	byte[] srcMAC = ((Ethernet)formattedPak).getSourceMACAddress();
+            byte[] dstMAC = ((Ethernet)formattedPak).getDestinationMACAddress();
+            long srcMAC_val = BitBufferHelper.toNumber(srcMAC);
+            long dstMAC_val = BitBufferHelper.toNumber(dstMAC);
 
-        if (!status.isSuccess()) {
-            logger.warn("SDN Plugin failed to program the flow: {}. The failure is: {}",
-                    f, status.getDescription());
-            return false;
-        } else {
-            return true;
+            Packet nextPak = formattedPak.getPayload();
+            
+            
+            try {
+            	//payload of the frame
+            	String class_pck = nextPak.getClass().toString();
+	             System.out.println("Type of the received packet : "+class_pck);
+	             //ARP message
+                if (nextPak instanceof ARP) {
+	            	 	ARP arpPak = (ARP) nextPak;	            
+                        byte[] senderProtAddr = arpPak.getSenderProtocolAddress();
+                        byte[] targetProtAddr = arpPak.getTargetProtocolAddress();
+                        byte[] senderHwAddr = arpPak.getSenderHardwareAddress();
+                        System.out.println("ARP Frame received");
+                		System.out.println("-> "+senderProtAddr+" at "+senderHwAddr+"looks for "+targetProtAddr);
+                        try {
+                            InetAddress arpTargetIP = InetAddress.getByAddress(targetProtAddr);
+                            InetAddress arpSenderIP = InetAddress.getByAddress(senderProtAddr);
+
+                            logger.warn("Arp packet: src {}, dst {}", arpSenderIP, arpTargetIP);
+                            
+                            InetAddress ip_eth1 = InetAddress.getByName(this.ip_eth1_router);
+                            byte[] mac_eth1 = this.hw_eth1_router.clone();
+                            InetAddress ip_eth2 = InetAddress.getByName(this.ip_eth2_router);
+                            byte[] mac_eth2 = this.hw_eth2_router.clone();
+                            
+                            //ASKING FOR ip_eth1
+                            if (arpTargetIP.equals(ip_eth1)) {
+                                sendARPReply(incoming_connector, mac_eth1, ip_eth1, senderHwAddr, arpSenderIP);
+                                return PacketResult.CONSUME;
+                            }
+                            
+                          //ASKING FOR ip_eth2
+                            else if (arpTargetIP.equals(ip_eth2)) {
+                                sendARPReply(incoming_connector, mac_eth2, ip_eth2, senderHwAddr, arpSenderIP);
+                                return PacketResult.CONSUME;
+                            }
+                        } catch (UnknownHostException e) {
+                        	//TODO
+                        	System.out.println(e.getMessage());
+                        
+                        }                			
+                	}
+                	
+                	//IP PACKET
+                	if (nextPak instanceof IPv4) {
+						InetAddress srcIP;
+						//extracting addresses
+						srcIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getSourceAddress()));
+	                	InetAddress dstIP = InetAddress.getByAddress(NetUtils.intToByteArray4(((IPv4)nextPak).getDestinationAddress()));
+						
+	                	System.out.println("IP packet received from " + srcIP.toString() + " to : " + dstIP.toString() +"on port " + incoming_connector + "  @  " + incoming_node +" Ethertype : "+((Ethernet)formattedPak).getEtherType() );
+	                	
+	                	//learning
+	                	
+	                	//TABLES INITIALISATION : 1st packet received
+	                    if (this.ip_to_port_per_switch.get(incoming_node) == null) {
+	                         this.ip_to_port_per_switch.put(incoming_node, new HashMap<InetAddress, NodeConnector>());  
+	                    }
+	                    if (this.ip_to_mac_destANDlocal.get(incoming_node) == null) {
+	                         this.ip_to_mac_destANDlocal.put(incoming_node, new HashMap<InetAddress, byte[][]>());  
+	                    }
+	            
+	                    //Filling tables : 		
+	                    if ( (this.ip_to_port_per_switch.get(incoming_node).put(srcIP, incoming_connector)) == null){
+	                    	System.out.println("new entry in the table for IP = "+srcIP);
+	                    }
+	                    //update if already existing, way to learn the addresses of an interfaces
+	                    byte[][] mac_destANDlocal = {srcMAC,dstMAC};
+	                    this.ip_to_mac_destANDlocal.get(incoming_node).put(srcIP, mac_destANDlocal);
+	                    
+	                    
+	                	//forwarding packet
+	                    //checking if the route to the destination is known.
+	                    NodeConnector dst_connector = this.ip_to_port_per_switch.get(incoming_node).get(dstIP);
+	                    byte[][] resolved_macs = this.ip_to_mac_destANDlocal.get(incoming_node).get(dstIP);
+	                    //if there is an output : defining new flow
+	                    if (dst_connector != null && resolved_macs != null) {
+	                    	System.out.println("IP packet must be transmitted on : " + dst_connector + " @ " + incoming_node);
+	                    	//defining the match
+	                    	Match match = new Match();
+	                    	match.setField(MatchType.DL_TYPE, (short) 0x0800);
+	                    	match.setField(MatchType.IN_PORT, incoming_connector);
+	                        match.setField(MatchType.NW_DST, dstIP);
+	                        //defining actions
+	                        List<Action> actions = new ArrayList<Action>();
+	                        //defining new dest MAC addr
+	                        actions.add(new SetDlDst(resolved_macs[0]));
+	                        //defining new src MAC addr
+	                        actions.add(new SetDlSrc(resolved_macs[1]));
+	                        //defining output interface
+	                        actions.add(new Output(dst_connector));
+	             
+	                        Flow f = new Flow(match, actions);
+	                        f.setPriority((short)512);
+	                        Status status = programmer.addFlow(incoming_node, f);
+	                        if (!status.isSuccess()) {
+	                            System.out.println(
+	                                    "SDN Plugin failed to program the flow: "+ f +" The failure is: {}"+
+	                                    status.getDescription());
+	                            return PacketResult.IGNORED;
+	                        }
+	                        System.out.println("Installed flow "+f+" in node "+ incoming_node);   	
+	                    }else{
+	                    System.out.println("output not found for IP = "+dstIP+" snapshot of the table"+this.ip_to_port_per_switch.toString()+" and "+this.ip_to_mac_destANDlocal.toString());
+	                    }
+	                }    
+                }
+           
+         catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+            
         }
+        return PacketResult.IGNORED;
     }
+    
+    
+ 
+    
+    //ARP HANDLING
+    protected void sendARPReply(NodeConnector p, byte[] sMAC, InetAddress sIP, byte[] tMAC, InetAddress tIP) {
+        byte[] senderIP = sIP.getAddress();
+        byte[] targetIP = tIP.getAddress();
+        ARP arp = createARP(ARP.REPLY, sMAC, senderIP, tMAC, targetIP);
+
+        Ethernet ethernet = createEthernet(sMAC, tMAC, arp);
+
+        RawPacket destPkt = this.dataPacketService.encodeDataPacket(ethernet);
+        destPkt.setOutgoingNodeConnector(p);
+
+        this.dataPacketService.transmitDataPacket(destPkt);
+        System.out.println("ARP reply sent to "+senderIP+" at MAC: "+sMAC+" saying that "+targetIP+" is at "+ tMAC);
+    }
+
+    private ARP createARP(short opCode, byte[] senderMacAddress, byte[] senderIP, byte[] targetMacAddress,
+            byte[] targetIP) {
+        ARP arp = new ARP();
+        arp.setHardwareType(ARP.HW_TYPE_ETHERNET);
+        arp.setProtocolType(EtherTypes.IPv4.shortValue());
+        arp.setHardwareAddressLength((byte) 6); 
+        arp.setProtocolAddressLength((byte) 4); 
+        arp.setOpCode(opCode);
+        arp.setSenderHardwareAddress(senderMacAddress);
+        arp.setSenderProtocolAddress(senderIP);
+        arp.setTargetHardwareAddress(targetMacAddress);
+        arp.setTargetProtocolAddress(targetIP);
+        return arp;
+    }   
+    private Ethernet createEthernet(byte[] sourceMAC, byte[] targetMAC, ARP arp) {
+        Ethernet ethernet = new Ethernet();
+        ethernet.setSourceMACAddress(sourceMAC);
+        ethernet.setDestinationMACAddress(targetMAC);
+        ethernet.setEtherType(EtherTypes.ARP.shortValue());
+        ethernet.setPayload(arp);
+        return ethernet;
+    }
+    
+    
+   
 }
