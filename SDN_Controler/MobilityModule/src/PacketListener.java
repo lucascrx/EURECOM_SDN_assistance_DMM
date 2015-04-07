@@ -12,16 +12,42 @@ public class PacketListener {
 	//Mobility Tracker Module
 	private MobilityTracker mobTracker;
 	
+	
+	private int counterTunnelID = 0;
+	
 	/**
 	 * ALSO NEED:
 	 * TOPOLOGY MANAGER
 	 * retrieving ipv6 @ from prefix + node_id 
 	 * retrieving ipv6 @ from Node
 	 * 
+	 * :::
+	 * 
 	 * **/
 	
+	//TOPOLOGY manager
+	private TopologyManager topologyManager;
 	
-	private int counterTunnelID = 0;
+	//provide the IPV6 of the provided Node
+	public Inet6Address retrieveAddress(Node router){
+		Inet6Address routerAddress = null;
+		/**Consult a table**/
+		return routerAddress;
+	}
+	
+	//provide the IPV6 that the given host generates in a given network
+	//Can be computed or may be using a storing table
+	public Inet6Address retrieveAddress(Prefix netwPrefix, long nodeID){
+		Inet6Address hostAddress = null;
+		/**Computing**/
+		return hostAddress;
+	}
+	
+	/**sends openflow message to router containing flow f**/
+	public void pushFlow(Flow f, Node Router){
+		//TODO
+	}
+	
 	
 	
 	void onPacketReceived(Node ReceivingNode, NodeConnector receivingIntf, Packet packet){
@@ -58,6 +84,9 @@ public class PacketListener {
 						 * 
 						 * NEW ONE : >extract from the tunnel packets to the MN inserted by the old router
 						 * 			 >insert in the tunnel packets leaving from the MN
+						 * 
+						 * QUESTION: why not chainning tunnels with loopback?
+						 * 
 						 * **/
 						for (RouterPrefix ancester : trace){
 							if(ancester.equals(trace.get(trace.size()-1))){
@@ -70,62 +99,62 @@ public class PacketListener {
 								
 								//Flow Network ----> MN
 								
-								Match matchAncester1 = new Match();
+								Matchs matchAncester1 = new Matchs();
 								//computing old address of the node when it was under ancester coverage
 								Inet6Address oldAddress = retrieveAddress(ancester.getPrefix(),newNodeID);
-								matchAncester1.add('addr_nw_dest',oldAddress);
+								matchAncester1.add(new Match("addrNwDest",oldAddress));
 								
 								Actions actionsAncester1 = new Actions();
 								//this action doesn't exist
-								actionAncester1.add(new Action('set_tunnel_id',counterTunnelID));
-								actionAncester1.add(new Action('set_tunnel_dest',retrieveAddress(newRouter)));
-								actionAncester1.add(new Action('Output',this.topologyManager.getInterface(ancester.getRouter(),newRouter)));
-								Flow flowAncester1 = new flow(matchAncester1,actionAncester1);
+								actionsAncester1.add(new Action("setTunnelId",counterTunnelID));
+								actionsAncester1.add(new Action("setTunnelDest",retrieveAddress(newRouter)));
+								actionsAncester1.add(new Action("Output",this.topologyManager.getInterface(ancester.getRouter(),newRouter)));
+								Flow flowAncester1 = new Flow(matchAncester1,actionsAncester1);
 								
 								//Flow Network <---- MN
 								
-								Match matchAncester2 = new Match();
-								matchAncester1.add('tunnel_id',counterTunnelID);
+								Matchs matchAncester2 = new Matchs();
+								matchAncester1.add(new Match("tunnelId",counterTunnelID));
 								
 								Actions actionsAncester2 = new Actions();
 								//this action doesn't exist
-								actionsAncester2.add(new Action('unset_tunnel_id',counterTunnelID));
+								actionsAncester2.add(new Action("unsetTunnelId",counterTunnelID));
 								//now the packet is like to the one that the mn sent when it was under ancester coverage
 								//and the routing flow is already set : LOOPBACK
-								actionsAncester2.add(new Action('Loopback'))
-								Flow flowAncester2 = new flow(matchAncester2,actionAncester2);
+								actionsAncester2.add(new Action("loopback",null));
+								Flow flowAncester2 = new Flow(matchAncester2,actionsAncester2);
 								
 								//pushing flows
-								ancester.getRouter().pushflow(flowAncester1);
-								ancester.getRouter().pushflow(flowAncester2);
+								pushFlow(flowAncester1,ancester.getRouter());
+								pushFlow(flowAncester2,ancester.getRouter());
 								
 								//NEW ROUTER SIDE
 								
 								//Flow Network <---- MN
-								Match matchNewRouter1 = new Match();
-								matchNewRouter1.add('addr_nw_src',oldAddress);
+								Matchs matchNewRouter1 = new Matchs();
+								matchNewRouter1.add(new Match("addrNwSrc",oldAddress));
 								
 								Actions actionsNewRouter1 = new Actions();
 								//this action doesn't exist
-								actionNewRouter1.add(new Action('set_tunnel_id',counterTunnelID));
-								actionAncester1.add(new Action('set_tunnel_dest',retrieveAddress(ancester.getRouter())));
-								actionNewRouter1.add(new Action('Output',this.topologyManager.getInterface(newRouter,ancester.getRouter())));
-								Flow flowNewRouter1 = new flow(matchNewRouter1,actionNewRouter1);
+								actionsNewRouter1.add(new Action("setTunnelId",counterTunnelID));
+								actionsNewRouter1.add(new Action("setTunnelDest",retrieveAddress(ancester.getRouter())));
+								actionsNewRouter1.add(new Action("Output",this.topologyManager.getInterface(newRouter,ancester.getRouter())));
+								Flow flowNewRouter1 = new Flow(matchNewRouter1,actionsNewRouter1);
 								
 								//Flow Network ---> MN
-								Match matchNewRouter2 = new Match();
-								matchNewRouter2.add('tunnel_id',counterTunnelID);
+								Matchs matchNewRouter2 = new Matchs();
+								matchNewRouter2.add(new Match("tunnelId",counterTunnelID));
 								Actions actionsNewRouter2 = new Actions();
 								//this action doesn't exist
-								actionsNewRouter2.add(new Action('unset_tunnel_id',counterTunnelID));
+								actionsNewRouter2.add(new Action("unsetTunnelId",counterTunnelID));
 								/**
 								 * QUESTION: output on local interface  possible? as only edge routers
 								 * **/
-								Flow flowNewRouter2 = new flow(matchNewRouter2,actionNewRouter2);
+								Flow flowNewRouter2 = new Flow(matchNewRouter2,actionsNewRouter2);
 								
 								//pushing flows
-								newRouter.pushflow(flowNewRouter1);
-								newRouter.pushflow(flowNewRouter2);
+								pushFlow(flowNewRouter1,newRouter);
+								pushFlow(flowNewRouter2,newRouter);
 	
 							}
 						}
