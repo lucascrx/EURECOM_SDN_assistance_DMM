@@ -13,6 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#======================================================================
+#TO BE USED WITH mobilityPackage folder
+#----------------------------------------------------------------------
+
+# must be used with a mininet topology that has:
+#     *A stricly related backbone
+#     *The first interface of each router must be the local Network one
+
+#----------------------------------------------------------------------
+#TO FIX : make router solicitation accepted by hosts
+#TO DO: ping handling / normal routing handling /
+#       testing mobility flow set up
+#======================================================================
+
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
