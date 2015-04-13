@@ -2,10 +2,9 @@
 
 Eurecom Semester Project SPRING 2015
 
-Miscellaneous (drafts of) implementations of SDN controllers at least
-under OpenDayLight Framework. The final idea is to get an
-implementation allowing Distributed Mobility Management within the
-network.
+Miscellaneous (drafts of) implementations of SDN controllers, the
+final idea is to get an implementation allowing Distributed Mobility
+Management within the network.
 
 Documentation about Distributed Mobility Management and Software
 defined Networking

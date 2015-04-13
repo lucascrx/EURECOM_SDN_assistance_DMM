@@ -13,6 +13,12 @@ Here is a quick sum up of the implementations we have:
  switches with router capabilities AND with mobility management
  capabilities.
 
+*MobilityModule : is just a set of java class that formalize mobility
+ management in SDN.
+
+* Topologies is a folder where virtual networks are designed to test
+  SDN controllers.
+
 Note April, 12: finally in customizing the simple_router_13.py we
 managed to get something that works: ipv6 seems to be handled by the
 controller. Now our problem is to make mininet hosts consider Router
