@@ -176,7 +176,11 @@ class SimpleSwitch13(app_manager.RyuApp):
  
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
-        i = pkt.get_protocols(ipv6)[0]
+        i = pkt.get_protocol(ipv6)
+        if i is None:
+            print 'NON IPV6 Packet : '
+            print pkt
+            return 0
         dst = eth.dst
         src = eth.src
         pkt_type =0
