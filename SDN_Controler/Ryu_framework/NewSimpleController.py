@@ -47,7 +47,7 @@ import ryu.topology.switches
 import ryu.topology.event
 import ryu.topology.api
 
-from ryu.mobilityPackage import MobilityTracker
+from ryu.mobilityPackage import mobilityTracker
 
 
 # BCE = [] # Binding Cache Entry
@@ -81,7 +81,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.switchList = []
         self.linkList = []
         self.bindingList = {}
-        self.mobTracker = MobilityTracker()
+        self.mobTracker = mobilityTracker.MobilityTracker()
         self.tunnelID = 1
         #Constant set to TRUE at the FIrst packet reception
         self.RoutingDone = False
@@ -151,8 +151,10 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.switchList = ryu.topology.api.get_all_switch(appManager)
             #switchNames = [switch.dp.id for switch in listSwitch]
             self.linkList = ryu.topology.api.get_all_link(appManager)
+            print(self.linkList)
             #linksConnection = [str(link.src.dpid)+str(link.src.port_no)+str(link.dst.dpid) for link in self.linkList]
             
+
             #Creating backbone IP @ and binding them to port and switches
             for link in self.linkList:
                 if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
@@ -233,7 +235,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 #create tunnel with all the previous network and the current one
                 for priorDp in priorNetworks[:-1]:
                     tunID = self.tunnelID
-                    self.tunnelID = ++
+                    self.tunnelID += 1
                     
                     #prior Network SIDE:
                     
