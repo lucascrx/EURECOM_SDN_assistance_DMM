@@ -126,7 +126,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     
     #return the MAC address associated DATAPATH_id and port_id
     def generateMAC(self, dpid, portid):
-        addMAC = '0'+str(dpid)+':00:00:00:00:0'+str(portid)
+        addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
         return addMAC
 												
     #Packet handler
@@ -329,24 +329,32 @@ class SimpleSwitch13(app_manager.RyuApp):
             #direct reply on the incomming switch port
             out_port = in_port 
             pkt_generated = packet.Packet()
-            e= ethernet.ethernet(dst=str(eth.src), src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
+
+            e= ethernet.ethernet(dst='33:33:00:00:00:01',src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
+            #dst=str(eth.src)
+
             #the first port must be the one toward the lan!!!
             if in_port == 1: #this packet is not from the backbone -> must be from the local dependant NW : generated on the fly
                 srcIP = '200'+str(dpid)+'::1'
             else:#otherwise use the bindingList
                 srcIP = self.bindingList[dpid,in_port]
-            ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst=str(i.src))
+            ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst='ff02::1') #str(i.src))
             #setting up prefix : the dependant Local Network prefix is returned
             prefix = '200'+str(dpid)+'::'
             
-            icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=3000, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
+            icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
             pkt_generated.add_protocol(e)
             pkt_generated.add_protocol(ip)
             pkt_generated.add_protocol(icmp_v6)
             pkt_generated.serialize()
 
             print repr(pkt_generated.data)
- 
+            print('~~~~~~~~TEST~~~~~~~~')
+            #Manually setting the field Home Agent to 1 (cf wireshark)
+            print(type(icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)])))
+            #pkt_generated.data[59]=32
+            print('~~~~~~~~~~~~~~~~~~~~')
+            
             #dpid = datapath.id
             #self.mac_to_port.setdefault(dpid, {})
             #self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
