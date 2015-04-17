@@ -43,6 +43,7 @@ from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
+from ryu.lib.packet import lldp
 from ryu.lib.packet.ipv6 import ipv6	
 from ryu.lib.packet import icmpv6
 from ryu.lib.packet.icmpv6 import nd_router_advert
@@ -63,7 +64,8 @@ class SimpleSwitch13(app_manager.RyuApp):
     
     def __init__(self, *args, **kwargs):
        	super(SimpleSwitch13, self).__init__(*args, **kwargs)
-        #Attribute not used
+        #Resolving MAC @ : dictionnary where :
+        # (src_dp_id,src_port_no) --> (@MAC local)
         self.mac_to_port = {}
         #switches list obtained from the app_manager
         self.switchList = []
@@ -124,10 +126,16 @@ class SimpleSwitch13(app_manager.RyuApp):
             if l.src.dpid==source and l.dst.dpid==dest:
                 return l.src.port_no
     
-    #return the MAC address associated DATAPATH_id and port_id
+    #return the MAC address associated to DATAPATH_id and port_id
     def generateMAC(self, dpid, portid):
         addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
         return addMAC
+
+    #return the Local Scope IPV6 address associated to DATAPATH_id and port_id
+    def generateLL(self, dpid, portid):
+        addLL = 'fe80::a6ff:'+str(dpid)+':ffff:'+str(portid)
+        return addLL 
+
 												
     #Packet handler
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -149,11 +157,40 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Protocol stuff
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
+        #Updating MAC @ in mac_to_port register:
+        dst = eth.dst
+        src = eth.src
+        #checking if destination is not a broadcast @
+        
+        #otherwise no update of localport.
+        # if int(dst[1])&1==0:
+        #     #not broadcast:
+        #     self.mac_to_port[datapath.id,in_port]=dst
+        #     print('|||||||||||||MAC TO PORT UPDATED||||||||||||||||')
+        #     print(self.mac_to_port)
+        # else:
+        #     print ('||||broadcast @ ')
+        #     print (dst)
+        print('L2 frame : SRC : ',src,' DEST : ',dst)
+        
+        #sending port update
+        #...
+        
+
         i = pkt.get_protocol(ipv6)
         #if it's not related to IPV6, not considered
         if i is None:
-            print("----------NON IPV6 PACKET----------")
-            print pkt
+            l = pkt.get_protocols(lldp.lldp)
+            if l is not None:
+                print('lldp message received')
+                #print(l)
+                l = l[0]
+                print((l.tlvs)[0].chassis_id)
+                print(repr((l.tlvs)[1].port_id))
+            
+            else :
+                print("----------NON IPV6 PACKET----------")
+                print pkt
             print("========================================")
             return 0
         print("------------IPV6 PACKET------------")
@@ -167,6 +204,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.switchList = ryu.topology.api.get_all_switch(appManager)
             #switchNames = [switch.dp.id for switch in listSwitch]
             self.linkList = ryu.topology.api.get_all_link(appManager)
+            print(self.linkList)
             #linksConnection = [str(link.src.dpid)+str(link.src.port_no)+str(link.dst.dpid) for link in self.linkList]
             
             #Once topology is known, addresses IP are distributed:
@@ -180,8 +218,6 @@ class SimpleSwitch13(app_manager.RyuApp):
             #The routing is done only once
             self.RoutingDone = True
 
-        dst = eth.dst
-        src = eth.src
         pkt_type =0
          
         dpid = datapath.id
@@ -201,14 +237,16 @@ class SimpleSwitch13(app_manager.RyuApp):
                 if icmp.type_== 133:
                     print 'Type : Router Solicitation'
                     itype = 1
-                if icmp.type_== 134:
+                elif icmp.type_== 134:
                     print 'Type : Router Advertisement'
                     itype = 2
-                if icmp.type_== 128:
+                elif icmp.type_== 128:
                     print 'Type : Echo Request'
-                if icmp.type_== 129:
+                    itype = 4
+                elif icmp.type_== 129:
                     print 'Type : Echo Reply'
-                if icmp.type_ ==136:
+                    itype = 5
+                elif icmp.type_ ==136:
                     print 'Type : Neighbour Advertisement'
                     itype=3
                 else:
@@ -237,6 +275,10 @@ class SimpleSwitch13(app_manager.RyuApp):
             #host ID based on MAC address
             #the currrent datapath is also provided
             priorNetworks = self.mobTracker.getTraceAndUpdate(src,datapath);
+            print('~~~~~~~~~~NODE HAS REGISTERED~~~~~~~~~~')
+            print('previous networks : ')
+            print (priorNetworks)
+            print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
             #if the list is empty there is nothing more to do
             #if not tunnels must be set up:
             if priorNetworks is not None:
@@ -270,7 +312,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     outputPortNb = self.routing(priorDp.id,dpid)
                     actionsOldInput.append(parser.OFPActionOutput(outputPortNb))
                     
-                    #TODO : How mac addresses are set ?
+                    #TODO : changing MAC @ at every hop!!!
 
                     #Pushing flow not considering BUFFER ID
                     self.add_flow(priorDp, 1, matchOldInput, actionsOldInput)
@@ -330,15 +372,18 @@ class SimpleSwitch13(app_manager.RyuApp):
             out_port = in_port 
             pkt_generated = packet.Packet()
 
-            e= ethernet.ethernet(dst='33:33:00:00:00:01',src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
-            #dst=str(eth.src)
+            e= ethernet.ethernet(dst=str(eth.src),src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
+
 
             #the first port must be the one toward the lan!!!
-            if in_port == 1: #this packet is not from the backbone -> must be from the local dependant NW : generated on the fly
-                srcIP = '200'+str(dpid)+'::1'
-            else:#otherwise use the bindingList
-                srcIP = self.bindingList[dpid,in_port]
-            ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst='ff02::1') #str(i.src))
+        
+            #AS IT IS A REPLY TO ROUTER SOLLICITATION : SOURCE @ MUST BE LOCAL SCOPE!!
+            # if in_port == 1: #this packet is not from the backbone -> must be from the local dependant NW : generated on the fly
+            #     srcIP = '200'+str(dpid)+'::1'
+            # else:#otherwise use the bindingList
+            #     srcIP = self.bindingList[dpid,in_port]
+            srcIP = self.generateLL(dpid,in_port)
+            ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst=str(i.src))
             #setting up prefix : the dependant Local Network prefix is returned
             prefix = '200'+str(dpid)+'::'
             
@@ -348,12 +393,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             pkt_generated.add_protocol(icmp_v6)
             pkt_generated.serialize()
 
-            print repr(pkt_generated.data)
-            print('~~~~~~~~TEST~~~~~~~~')
-            #Manually setting the field Home Agent to 1 (cf wireshark)
-            print(type(icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)])))
-            #pkt_generated.data[59]=32
-            print('~~~~~~~~~~~~~~~~~~~~')
+            #print repr(pkt_generated.data)
             
             #dpid = datapath.id
             #self.mac_to_port.setdefault(dpid, {})
@@ -379,8 +419,40 @@ class SimpleSwitch13(app_manager.RyuApp):
  
             #datapath.send_msg(out)
             datapath.send_msg(out_ra)
-            print('>>>>> router advertisement sent <<<<<')
+            print('>>>>>>>>>> ROUTER ADVERTISEMENT SENT <<<<<<<<<<')
             return
+        
+        # #handling ping requests and reply
+        # elif itype == 4 or itype == 5:
+        #     #looking at destination address, finding out which is the next hope, changing MAC @ 
+        #     ping_src = i.src
+        #     ping_dst = i.dst
+            
+        #     #when ip dst @ is known : 3 cases:
+
+        #     #destination is behind another router
+        #     #destination is behind the current router
+        #     #destination is the current router 
+            
+        #     #fetching all the local addresses of the current switch
+        #     localAddressesList = [str('200')+str(priorDp.id)+'::1']
+        #     for localPort in range(2,len(self.switchList)):
+        #         localAddressesList.append(self.bindingList[dpid,localPort] 
+           
+        #     if (ping_dst in localAddressesList) :
+        #         print('ping addressed to the router')
+        #         #the ping is addressed to the switch:
+        #         #if it's a request : reply
+        #         #if itype == 4:
+        #             #reply
+        #     elif localAddressesList[0][0:63] == ping_dst[0:63]:
+        #         print('ping addressed to a host under switch network')
+
+        #     else:
+        #         print('ping another host or switch')
+
+
+
         else:
             print ('')
  			
