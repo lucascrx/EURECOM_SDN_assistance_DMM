@@ -9,8 +9,8 @@ class MobilityTracker():
     def getTraceAndUpdate(self, newHostID, newDp):
         #Checking if new Host has a Trace or not
         if newHostID not in self.trackingDict:
-            this.trackingDict(newHostID,newDp)
-        trace = this.tracking(newHostID)
+            self.trackingDict[newHostID] = [newDp]
+        trace = self.trackingDict[newHostID]
         if trace[-1].id == newDp.id:
             #the previous network is the current one OR no prior network
                 return None
