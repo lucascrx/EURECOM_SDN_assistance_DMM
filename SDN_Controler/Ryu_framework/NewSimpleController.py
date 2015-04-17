@@ -45,7 +45,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import lldp
 from ryu.lib.packet.ipv6 import ipv6	
-from ryu.lib.packet.icmpv6 import icmpv6
+from ryu.lib.packet import icmpv6
 from ryu.lib.packet.icmpv6 import nd_router_advert
 from ryu.ofproto  import ether, inet
 
@@ -140,7 +140,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     #Packet handler
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
-        print("===============NEW PACKET===============")
+        #print("===============NEW PACKET===============")
         
         # If you hit this you might want to increase 
         # the "miss_send_length" of your switch
@@ -171,7 +171,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         # else:
         #     print ('||||broadcast @ ')
         #     print (dst)
-        print('L2 frame : SRC : ',src,' DEST : ',dst)
+        #print('L2 frame : SRC : ',src,' DEST : ',dst)
         
         #sending port update
         #...
@@ -180,18 +180,18 @@ class SimpleSwitch13(app_manager.RyuApp):
         i = pkt.get_protocol(ipv6)
         #if it's not related to IPV6, not considered
         if i is None:
-            l = pkt.get_protocols(lldp.lldp)
-            if l is not None:
-                print('lldp message received')
-                #print(l)
-                l = l[0]
-                print((l.tlvs)[0].chassis_id)
-                print(repr((l.tlvs)[1].port_id))
+            # l = pkt.get_protocols(lldp.lldp)
+            # if l is not None:
+            #     print('lldp message received')
+            #     #print(l)
+            #     l = l[0]
+            #     print((l.tlvs)[0].chassis_id)
+            #     print(repr((l.tlvs)[1].port_id))
             
-            else :
-                print("----------NON IPV6 PACKET----------")
-                print pkt
-            print("========================================")
+            # else :
+            #     print("----------NON IPV6 PACKET----------")
+            #     print pkt
+            # print("========================================")
             return 0
         print("------------IPV6 PACKET------------")
 
@@ -213,6 +213,9 @@ class SimpleSwitch13(app_manager.RyuApp):
                 if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
                     self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
                     self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
+            #inserting local network interfaces in the binding list
+            for switch in self.switchList:
+                self.bindingList[switch.dp.id,1]='200'+str(switch.dp.id)+'::1'
             print('ROUTING DONE')
             print(self.bindingList)
             #The routing is done only once
@@ -229,7 +232,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 pkt_type=1
             if pkt_type == 1:
                 print("-----------------ICMPv6-----------------")	
-                icmp = pkt.get_protocols(icmpv6)[0]
+                icmp = pkt.get_protocols(icmpv6.icmpv6)[0]
                 #print 'ICMP type {}'.format(icmp.type_)
                 itype = 0
                 found = 0
@@ -261,7 +264,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_to_port.setdefault(dpid, {})
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
         print("Details : packet in ", dpid, src, dst, in_port)
-        print("========================================")
+       
 
         #once protocols are known, it's time to prepare answers
  
@@ -389,9 +392,9 @@ class SimpleSwitch13(app_manager.RyuApp):
             srcIP = self.generateLL(dpid,in_port)
             ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst=str(i.src))
             #setting up prefix : the dependant Local Network prefix is returned
-            prefix = '200'+str(dpid)+'::'
+            prefix = '200'+str(dpid)+'::1'
             
-            icmp_v6 = icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
+            icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
             pkt_generated.add_protocol(e)
             pkt_generated.add_protocol(ip)
             pkt_generated.add_protocol(icmp_v6)
@@ -428,17 +431,74 @@ class SimpleSwitch13(app_manager.RyuApp):
         
         #handling neighbour solicitation
         elif itype==6:
-            neighSol = pkt.get_protocols(icmpv6)[0]
-            opt = neighSol.data
-            print(opt)
+            neighSol = pkt.get_protocols(icmpv6.icmpv6)[0]
+            print (neighSol)
+            opt = neighSol.data.option
+            trg = neighSol.data.dst
+            print('CONTENT : ',opt)
+            if opt is not None :
+                print(type(opt))
+                if isinstance(opt,ryu.lib.packet.icmpv6.nd_option_sla):
+                #link layer address request
+
+                    #check if the solicited @ is the one of the router 
+                    trgPort = None
+                    for localPort in range(1,len(self.switchList)):
+                        if str(trg)==(self.bindingList[dpid,localPort]):
+                            trgPort = localPort
+                            break;
+                    #if the request concerns the router:
+                    if localPort is not None :
+                        #get hw@
+                        hw_addr = opt.hw_src
+                        #reply with a neighbor adv
+                        neigh_adv = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT, data=icmpv6.nd_neighbor(res=7, dst=str(trg), option=icmpv6.nd_option_tla(hw_src=self.generateMAC(dpid,localPort))))
+                        e= ethernet.ethernet(dst=str(hw_addr),src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
+                        #here reply with global scope @
+                        srcIP = self.bindingList[dpid,in_port]
+                        ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst=str(i.src))
+                        
+                        #direct reply on the incomming switch port
+                        out_port = in_port 
+                        pkt_generated = packet.Packet()
+
+                    
+                        pkt_generated.add_protocol(e)
+                        pkt_generated.add_protocol(ip)
+                        pkt_generated.add_protocol(neigh_adv)
+                        print('.........................')
+                        print(pkt_generated)
+                        pkt_generated.serialize()
+
+                        #TODO : think about the flow to set up
+                        # MATCH : router sollicitation for one of the local @:
+                        #creat tuple with all the local @ :
+                        # listTemp=[]
+                        # for i in range(1,len(self.switchList)):
+                        #     listTemp.append.(self.bindingList[dpid,i])
+                        # tupleLocalAdd =  tuple(listTemp)
+                        # matchs = [parser.OFPMatch(icmpv6_type=135,ipv6_nd_target=tupleLocalAdd)]
+                        
+
+                        #ACTION : the NA must be forwarded on the incomming switch port
+                        
+                        actions = [parser.OFPActionOutput(out_port)]	
+                        out_ra = parser.OFPPacketOut(datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions, data=pkt_generated.data)
+                        datapath.send_msg(out_ra)
+                        print('..........neighbor advertisement sent..........')
+                       
+            else:
+                print('conflict resolution')
+                #conflict resolution
+
             
         #handling ping requests and reply
         elif itype == 4 or itype == 5:
             #looking at destination address, finding out which is the next hope, changing MAC @ 
             ping_src = i.src
             ping_dst = i.dst
-            l4prot = pkt.get_protocols(icmpv6);
-            print(l4prot)
+            echo = pkt.get_protocols(icmpv6.icmpv6)[0];
+            print(echo)
             
             #when ip dst @ is known : 3 cases:
 
@@ -447,16 +507,37 @@ class SimpleSwitch13(app_manager.RyuApp):
             #destination is the current router 
             
             #fetching all the local addresses of the current switch
-            localAddressesList = [str('200')+str(priorDp.id)+'::1']
-            for localPort in range(2,len(self.switchList)):
+            localAddressesList = []
+            for localPort in range(1,len(self.switchList)):
                 localAddressesList.append(self.bindingList[dpid,localPort])
            
             if ping_dst in localAddressesList :
                 print('ping addressed to the router')
                 #the ping is addressed to the switch:
                 #if it's a request : reply
-                #   if itype == 4:
-            #        pingReply = icmpv6.icmpv6(type_=icmpv6.ND_ECHO_REPLY, data=icmpv6.echo(
+                if itype == 4:
+                    #copy request data into the reply
+                    reqData = echo.data
+                    pingReply = icmpv6.icmpv6(type_=icmpv6.ICMPV6_ECHO_REPLY, data=reqData)
+                    #direct reply on the incomming switch port
+                    out_port = in_port 
+
+                    e= ethernet.ethernet(dst=src,src=dst, ethertype=ether.ETH_TYPE_IPV6)
+                    #here reply with global scope @
+                    ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=str(ping_dst), dst=str(ping_src))
+                    pkt_generated = packet.Packet()
+
+                    pkt_generated.add_protocol(e)
+                    pkt_generated.add_protocol(ip)
+                    pkt_generated.add_protocol(pingReply)
+                    print('.........................')
+                    print(pkt_generated)
+                    pkt_generated.serialize()
+                    #ACTION : the NA must be forwarded on the incomming switch port
+                    actions = [parser.OFPActionOutput(out_port)]	
+                    out_ra = parser.OFPPacketOut(datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions, data=pkt_generated.data)
+                    datapath.send_msg(out_ra)
+                    print('..........Ping Reply sent..........')
                     
 
 
@@ -471,7 +552,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         else:
             print ('')
- 			
+            print("========================================")            
      #     elif itype ==3:
      #    		print 'Neighbour Advertisement'
      #    		#dpid = datapath.id
@@ -557,3 +638,4 @@ class SimpleSwitch13(app_manager.RyuApp):
      #    	out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,in_port=in_port, actions=actions, data=data)
      #    	datapath.send_msg(out)
      #    	return
+     
