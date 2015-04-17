@@ -1,17 +1,19 @@
 ###Here is a quick sum up of the implementations we have:
 
-* **RYU** : there are now 2 router controller implementations both based on
- codes of linux distribution of the VM distributed by SDN HUB.  
+* **RYU** : The controller is based on the code of simple_switch_13.py
+  provided with the VM, the code has been improved in order to enable
+  controller to handle first routing all among the network and then
+  mobility.
+  
+*The controller is topology independent as long as the
+  network respect the 2 following conditions : Strictly related
+  backbone (each router must share a link with every other router) and
+  the interface n°1 of each router must be dedicated to the local
+  Network.*
 
- 1. the 1st one is from simple_switch_13.py and it's the code we are
- currently working on.
-
- 2. the 2nd one is from rest_router.py, we changed some setting of the
- rest interface but since it's quite complicated, we abandoned it.
-
-* **ODL**: The objective here is to implement a controller able to provide
- switches with router capabilities AND with mobility management
- capabilities.
+ * **ODL**: The objective
+  here is to implement a controller able to provide switches with
+  router capabilities AND with mobility management capabilities.
 
 * **MobilityModule** : is just a set of java class that formalize mobility
  management in SDN.
@@ -20,11 +22,11 @@
   SDN controllers.
 
 *Note April, 17:* Now hosts can get configured autonomously, and
-router can handle in addition neighbor sollicitation and local ping,
+router can handle in addition neighbor solicitation and local ping,
 but in every case messages go through the controller, no flow is set.
 Code begins to get quite dirty, in the future it would be nice to
 split it in modules. Instead of re-looping at tunnel ends it has been
-decided to foward the packet on a default interface.
+decided to forward the packet on a default interface.
 
 Solved Issues : Router should reply to Router Solicitation with its
 Local Link address, make sure that it's the one set in the Router
@@ -45,7 +47,7 @@ be configured in order to enable OpenFlow communication with this
 switch and the controller, be sure to turn on interfaces with mininet
 at the beginning.
 
-Next steps : Enabling Stateless autoconfiguration, Testing dmm, Enable
+Next steps : Enabling Stateless auto-configuration, Testing dmm, Enable
 normal routing, discuss about MAC addresses in dmm.
 
 *Note April, 7:* as lots of problems have been encountered with ryu
