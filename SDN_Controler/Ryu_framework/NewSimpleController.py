@@ -45,7 +45,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import lldp
 from ryu.lib.packet.ipv6 import ipv6	
-from ryu.lib.packet import icmpv6
+from ryu.lib.packet.icmpv6 import icmpv6
 from ryu.lib.packet.icmpv6 import nd_router_advert
 from ryu.ofproto  import ether, inet
 
@@ -229,7 +229,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 pkt_type=1
             if pkt_type == 1:
                 print("-----------------ICMPv6-----------------")	
-                icmp = pkt.get_protocols(icmpv6.icmpv6)[0]
+                icmp = pkt.get_protocols(icmpv6)[0]
                 #print 'ICMP type {}'.format(icmp.type_)
                 itype = 0
                 found = 0
@@ -249,8 +249,12 @@ class SimpleSwitch13(app_manager.RyuApp):
                 elif icmp.type_ ==136:
                     print 'Type : Neighbour Advertisement'
                     itype=3
+                elif icmp.type_ ==135:
+                    print'Type : Neighbour Solicitation'
+                    itype=6
                 else:
                     print 'Type : other ICMPV6 message'
+                    print (icmp.type_)
 
         
         #mac_to_port is not used 
@@ -387,7 +391,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             #setting up prefix : the dependant Local Network prefix is returned
             prefix = '200'+str(dpid)+'::'
             
-            icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
+            icmp_v6 = icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
             pkt_generated.add_protocol(e)
             pkt_generated.add_protocol(ip)
             pkt_generated.add_protocol(icmp_v6)
@@ -422,34 +426,46 @@ class SimpleSwitch13(app_manager.RyuApp):
             print('>>>>>>>>>> ROUTER ADVERTISEMENT SENT <<<<<<<<<<')
             return
         
-        # #handling ping requests and reply
-        # elif itype == 4 or itype == 5:
-        #     #looking at destination address, finding out which is the next hope, changing MAC @ 
-        #     ping_src = i.src
-        #     ping_dst = i.dst
+        #handling neighbour solicitation
+        elif itype==6:
+            neighSol = pkt.get_protocols(icmpv6)[0]
+            opt = neighSol.data
+            print(opt)
             
-        #     #when ip dst @ is known : 3 cases:
+        #handling ping requests and reply
+        elif itype == 4 or itype == 5:
+            #looking at destination address, finding out which is the next hope, changing MAC @ 
+            ping_src = i.src
+            ping_dst = i.dst
+            l4prot = pkt.get_protocols(icmpv6);
+            print(l4prot)
+            
+            #when ip dst @ is known : 3 cases:
 
-        #     #destination is behind another router
-        #     #destination is behind the current router
-        #     #destination is the current router 
+            #destination is behind another router
+            #destination is behind the current router
+            #destination is the current router 
             
-        #     #fetching all the local addresses of the current switch
-        #     localAddressesList = [str('200')+str(priorDp.id)+'::1']
-        #     for localPort in range(2,len(self.switchList)):
-        #         localAddressesList.append(self.bindingList[dpid,localPort] 
+            #fetching all the local addresses of the current switch
+            localAddressesList = [str('200')+str(priorDp.id)+'::1']
+            for localPort in range(2,len(self.switchList)):
+                localAddressesList.append(self.bindingList[dpid,localPort])
            
-        #     if (ping_dst in localAddressesList) :
-        #         print('ping addressed to the router')
-        #         #the ping is addressed to the switch:
-        #         #if it's a request : reply
-        #         #if itype == 4:
-        #             #reply
-        #     elif localAddressesList[0][0:63] == ping_dst[0:63]:
-        #         print('ping addressed to a host under switch network')
+            if ping_dst in localAddressesList :
+                print('ping addressed to the router')
+                #the ping is addressed to the switch:
+                #if it's a request : reply
+                #   if itype == 4:
+            #        pingReply = icmpv6.icmpv6(type_=icmpv6.ND_ECHO_REPLY, data=icmpv6.echo(
+                    
 
-        #     else:
-        #         print('ping another host or switch')
+
+
+            elif localAddressesList[0][0:63] == ping_dst[0:63]:
+                print('ping addressed to a host under switch network')
+
+            else:
+                print('ping another host or switch')
 
 
 
