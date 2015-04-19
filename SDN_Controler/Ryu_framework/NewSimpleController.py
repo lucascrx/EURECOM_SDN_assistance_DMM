@@ -48,7 +48,7 @@ from ryu.lib.packet.ipv6 import ipv6
 from ryu.lib.packet import icmpv6
 from ryu.lib.packet.icmpv6 import nd_router_advert
 from ryu.ofproto  import ether, inet
-
+from ryu.lib import mac as mac_lib
 
 import ryu.controller.dpset   
 import ryu.controller.network
@@ -64,7 +64,9 @@ class SimpleSwitch13(app_manager.RyuApp):
     
     def __init__(self, *args, **kwargs):
        	super(SimpleSwitch13, self).__init__(*args, **kwargs)
-        #Resolving MAC @ : dictionnary where :
+        #dpid --> ([host1MAC,host1IP],[host2MAC,host2IP])
+        self.coveredHosts = {}
+        #not used! Resolving MAC @ : dictionnary where :
         # (src_dp_id,src_port_no) --> (@MAC local)
         self.mac_to_port = {}
         #switches list obtained from the app_manager
@@ -117,12 +119,12 @@ class SimpleSwitch13(app_manager.RyuApp):
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst)
         datapath.send_msg(mod)
-      
+        
 
     #return the port number from witch the datapath with 
     #dpid = source can reach the datapath with dpid = dest
     def routing(self, source, dest):
-        for l in listLinks:
+        for l in self.linkList:
             if l.src.dpid==source and l.dst.dpid==dest:
                 return l.src.port_no
     
@@ -216,6 +218,8 @@ class SimpleSwitch13(app_manager.RyuApp):
             #inserting local network interfaces in the binding list
             for switch in self.switchList:
                 self.bindingList[switch.dp.id,1]='200'+str(switch.dp.id)+'::1'
+                #initilizing coveredHosts dictionnary:
+                self.coveredHosts[switch.dp.id]=[]
             print('ROUTING DONE')
             print(self.bindingList)
             #The routing is done only once
@@ -443,7 +447,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
                     #check if the solicited @ is the one of the router 
                     trgPort = None
-                    for localPort in range(1,len(self.switchList)):
+                    for localPort in range(1,len(self.switchList)+1):
                         if str(trg)==(self.bindingList[dpid,localPort]):
                             trgPort = localPort
                             break;
@@ -489,8 +493,13 @@ class SimpleSwitch13(app_manager.RyuApp):
                        
             else:
                 print('conflict resolution')
-                #conflict resolution
-
+                
+                #conflict resolution : Storing in the dict. 
+                if trg[0:4] != 'fe80' :
+                    #registering globlal @
+                    #!!!TODO Handle unicity in case of subsequent router solicitation
+                    self.coveredHosts[dpid].append([eth.src,trg])
+                    print ('registered hosts', self.coveredHosts)
             
         #handling ping requests and reply
         elif itype == 4 or itype == 5:
@@ -508,12 +517,15 @@ class SimpleSwitch13(app_manager.RyuApp):
             
             #fetching all the local addresses of the current switch
             localAddressesList = []
-            for localPort in range(1,len(self.switchList)):
+            for localPort in range(1,len(self.switchList)+1):
                 localAddressesList.append(self.bindingList[dpid,localPort])
            
+            print localAddressesList
             if ping_dst in localAddressesList :
                 print('ping addressed to the router')
                 #the ping is addressed to the switch:
+                #!!!! not really working only with local network interfaces
+                #!!!!not working with backbones interfaces!!!
                 #if it's a request : reply
                 if itype == 4:
                     #copy request data into the reply
@@ -534,21 +546,59 @@ class SimpleSwitch13(app_manager.RyuApp):
                     print(pkt_generated)
                     pkt_generated.serialize()
                     #ACTION : the NA must be forwarded on the incomming switch port
-                    actions = [parser.OFPActionOutput(out_port)]	
+                    actions = [parser.OFPActionOutput(out_port)]
+                    
                     out_ra = parser.OFPPacketOut(datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions, data=pkt_generated.data)
                     datapath.send_msg(out_ra)
+                    #Flow to set up...
+                    # for lclPort,dstAddr in enumerate(localAddressesList) :
+                    #     match = parser.OFPMatch(icmpv6_type=128,ipv6_dst=dstAddr)
+                    #     action =  [parser.OFPActionOutput(lclPort)]
                     print('..........Ping Reply sent..........')
                     
-
-
-
-            elif localAddressesList[0][0:63] == ping_dst[0:63]:
-                print('ping addressed to a host under switch network')
-
             else:
-                print('ping another host or switch')
-
-
+                print('ping another host or switch received by ', dpid, 'going to', ping_dst)
+                #pinging switches interfaces
+                # for localPort in range(2,len(self.switchList)):
+                #     match = parser.OFPMatch(ipv6_dst=(self.bindingList[dpid,localPort]))
+                #     action = [parser.OFPActionOutput(localPort)]
+                #     self.add_flow(datapath, 1, match, action)
+             
+                #pinging hosts
+                for dp_ID in range(1,len(self.switchList)+1):
+                    if ping_dst[0:4]==self.bindingList[dp_ID,1][0:4]:
+                        print ('ping going to ', ping_dst , ' must be routed to ', str(dp_ID) ,' as localNW domain is ', self.bindingList[dp_ID,1])
+                        break
+                    else:
+                        print ('destination not under ', str(dp_ID), ' domain')
+                
+                print(self.bindingList[dp_ID,1][0:4])
+                if dp_ID == dpid:
+                    outputIntf = 1
+                    print('ping toward local network')
+                    #setting new addresses MAC:
+                    new_mac_src = self.generateMAC(dpid,1)
+                    for idx,host in enumerate(self.coveredHosts[dpid]):
+                        if host[1] == ping_dst:
+                            new_mac_dst = self.coveredHosts[dpid][idx][0]
+                            break
+                else:
+                    outputIntf = self.routing(dpid,dp_ID)
+                    new_mac_src = self.generateMAC(dpid,outputIntf)
+                    new_mac_dst = self.generateMAC(dp_ID,self.routing(dp_ID,dpid))
+                    print ('ping toward neighbor ', outputIntf)
+                        
+                print('new mac src : ', new_mac_src)
+                print('new mac dst : ', new_mac_dst)
+                action = [parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src),
+                          parser.OFPActionSetField(eth_dst=new_mac_dst),parser.OFPActionOutput(outputIntf) ]
+            
+                match = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(ping_dst,'ffff:ffff:ffff:ffff::'))
+                print('ready to push flow to ',datapath)
+                self.add_flow(datapath, 1, match, action)
+                print('flow pushed')        
+                
+                
 
         else:
             print ('')

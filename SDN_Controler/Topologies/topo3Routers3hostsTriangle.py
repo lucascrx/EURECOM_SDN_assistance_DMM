@@ -41,7 +41,7 @@ class MyTopo( Topo ):
 
 def run():
     topo = MyTopo()
-    net = Mininet(topo=topo, controller=RemoteController)
+    net = Mininet(topo=topo, controller=RemoteController )
     s1, s2, s3 = net.get('s1','s2','s3')
 
     s1.cmd('ifconfig s1-eth1 inet6 add 2001::1/64')
