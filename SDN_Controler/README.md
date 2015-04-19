@@ -21,6 +21,21 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
+*Note April, 19:* Hosts can ping each other across sub-networks and
+can ping router local network interfaces. Backbone interfaces pinging
+is not possible yet, is it really necessary to work on
+it?...Controller keep trace of which host is under which router thanks
+to neighbor advertisement, they are also able to respond to them to allow
+mac address resolution. Ping routing is done by FLOWS installed in the different
+switches that also updates MAC addresses.
+
+Next Steps : Switch ping reply is still forwarded to controller, think
+about pushing a new flow for it. Flows takes time to be set up : about
+3 or 4 packets lost : thinking about buffering solution. Try to make
+an host moves from one sub Network to another with mininet. Think
+about handling exceptions in routing procedure.
+
+
 *Note April, 17:* Now hosts can get configured autonomously, and
 router can handle in addition neighbor solicitation and local ping,
 but in every case messages go through the controller, no flow is set.

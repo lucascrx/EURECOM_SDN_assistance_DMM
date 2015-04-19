@@ -571,6 +571,10 @@ class SimpleSwitch13(app_manager.RyuApp):
                         break
                     else:
                         print ('destination not under ', str(dp_ID), ' domain')
+                #handle the case where is wrong
+                else:
+                    print ('no subdomain found deleting packet')
+                    #throw exception
                 
                 print(self.bindingList[dp_ID,1][0:4])
                 if dp_ID == dpid:
@@ -582,6 +586,9 @@ class SimpleSwitch13(app_manager.RyuApp):
                         if host[1] == ping_dst:
                             new_mac_dst = self.coveredHosts[dpid][idx][0]
                             break
+                    else:
+                        print ('host unknown is the subdomain deleting packet')
+                         #throw exception
                 else:
                     outputIntf = self.routing(dpid,dp_ID)
                     new_mac_src = self.generateMAC(dpid,outputIntf)
