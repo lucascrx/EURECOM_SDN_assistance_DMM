@@ -21,6 +21,26 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
+*Note April, 24:* Ping capabilities are still the same, the code has
+ been split into several functions. It's now possible to generate
+ the IPv6 address associated to a MAC address and a Network prefix,
+ tunnelling set up has been cleaned : but still problems on MATCHS
+ (apparently related to VLANs), 2 case out 4 may need to be installed
+ in a reactive mode instead of a proactive mode as we need packet
+ information for routing or setting up MAC addresses
+
+ Solved Issues : as implementing node mobility with mininet seems
+ quite complicated, a first solution is to create a static network
+ consists in turning one of the host down while turning another host
+ linked to another router up with the MAC address of the first
+ host.
+
+ Next Steps : Understanding how handle mobility with mininet in
+ command line and not coded in the python configuration
+ file. Resolving matching problems when setting up tunnels. Find a way
+ to push the 2 problematic flow for tunnel establishment : may be
+ implement reactive pushing.
+
 *Note April, 19:* Hosts can ping each other across sub-networks and
 can ping router local network interfaces. Backbone interfaces pinging
 is not possible yet, is it really necessary to work on
