@@ -13,6 +13,7 @@ from mininet.net import Mininet
 from mininet.node import Node, RemoteController, Controller
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+from mininet.node import OVSSwitch
 
 class MyTopo( Topo ):
     "Simple topology example."
