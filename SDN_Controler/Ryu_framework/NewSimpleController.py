@@ -15,10 +15,6 @@
 
 
 
-
-
-
-
 #======================================================================
 #TO BE USED WITH mobilityPackage folder
 #MUST BE EXECUTED WITH --observe-link OPTION
@@ -189,13 +185,20 @@ class SimpleSwitch13(app_manager.RyuApp):
         #set up mac addresses
         new_mac_src1 = self.generateMAC(priorDp.id,outputPortNb)
         new_mac_dst1 = self.generateMAC(datapath.id,self.routing(datapath.id,priorDp.id))
+
+        #the value of the vlan has to set the highest of the 4 bits of OFPVID_PRESENT to 1
+        #the effective value is then 0x1000 | tunnID and 0x1000 = 4096
+        # Describe sum of vlan_id eg  (tunn id = 6   | OFPVID_PRESENT(0x1000=4096)) -> value = 4102 
+        valTun = 4096 | tunID
+
+
         #defining action list
         actionsOldInput = [parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src1),
                             parser.OFPActionSetField(eth_dst=new_mac_dst1),
-                            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=tunID),parser.OFPActionOutput(outputPortNb) ]
+                            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=valTun),parser.OFPActionOutput(outputPortNb) ]
     
         #Pushing flow not considering BUFFER ID
-        self.add_flow(priorDp, 1, matchOldInput, actionsOldInput)
+        self.add_flow(priorDp, 65535, matchOldInput, actionsOldInput)
 
         #TODO : Flow Network <--- Host
         
@@ -206,7 +209,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Handling packets that comes from the tunnel
 
         #MATCH : packets from vlan
-        matchOldOutput = parser.OFPMatch(vlan_vid=tunID)
+        matchOldOutput = parser.OFPMatch(vlan_vid=(0x1000 | tunID))
         #ACTIONS : desencapsulate + update mac @ + forward
         #Need to find a solution For resolving output port:
         #at worst asking flow table
@@ -231,7 +234,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     
         #MATCH : if outcoming packets with host old @ as src @
         #match for ICMP only must be updated by the time
-        matchNewOutput = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+        matchNewOutput = parser.OFPMatch(eth_type=0x86dd, ip_proto=58, ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating MAC @+forward them to the new router
 
@@ -240,21 +243,26 @@ class SimpleSwitch13(app_manager.RyuApp):
         #set up mac addresses
         new_mac_src3 = new_mac_dst1
         new_mac_dst3 = new_mac_src1
+
+
         #defining action list
-        actionsNewOutput = [parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src3),
-                            parser.OFPActionSetField(eth_dst=new_mac_dst3),
-                            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=tunID),parser.OFPActionOutput(outputPortNb3) ]
-    
+
+        actionsNewOutput = [
+            parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src3),
+            parser.OFPActionSetField(eth_dst=new_mac_dst3),
+            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=valTun),
+            parser.OFPActionOutput(outputPortNb3) ]
+                            
 
         #Pushing flow not considering BUFFER ID
-        self.add_flow(datapath, 1, matchNewOutput, actionsNewOutput)
+        self.add_flow(datapath,65535,matchNewOutput, actionsNewOutput)
 
         #Flow Network --> Host:
 
         #Handling packets that comes from the tunnel
         
         #MATCH : packets that come from vlan
-        matchNewInput = parser.OFPMatch(vlan_vid=tunID)
+        matchNewInput = parser.OFPMatch((0x1000 | tunID))
         #ACTIONS : desencapsulate + update MAC @ + forward on local network
         new_mac_src4=self.generateMAC(datapath.id,1)#local network interface
         #TO PROBLEM : NO ACCESS TO packet : solution? reactive mode as case 2?
