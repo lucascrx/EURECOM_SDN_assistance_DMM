@@ -19,15 +19,9 @@
 #TO BE USED WITH mobilityPackage folder
 #MUST BE EXECUTED WITH --observe-link OPTION
 #----------------------------------------------------------------------
-
 # must be used with a mininet topology that has:
 #     *A stricly related backbone
 #     *The first interface of each router must be the local Network one
-
-#----------------------------------------------------------------------
-#TO FIX : make router solicitation accepted by hosts
-#TO DO: ping handling / normal routing handling /
-#       testing mobility flow set up
 #======================================================================
 
 
@@ -161,8 +155,11 @@ class SimpleSwitch13(app_manager.RyuApp):
 
     #Set up tunnel for traffic forwading in mobility handling
     def setUpTunnel(self, hostID,priorDp,datapath,tunID):
-
-        parser = datapath.ofproto_parser
+        
+        parserOld = priorDp.ofproto_parser
+        ofpOld = priorDp.ofproto
+        parserNew = datapath.ofproto_parser
+        
         #prior Network SIDE:
         #Flow Network ---> Host :
  
@@ -177,7 +174,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     
         #MATCH : if incoming packets that try to reach host old @
         #match for ICMP only must be updated by the time
-        matchOldInput = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+        matchOldInput = parserOld.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating mac @+forward them to the new router
         #Resolving output port
@@ -193,9 +190,9 @@ class SimpleSwitch13(app_manager.RyuApp):
 
 
         #defining action list
-        actionsOldInput = [parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src1),
-                            parser.OFPActionSetField(eth_dst=new_mac_dst1),
-                            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=valTun),parser.OFPActionOutput(outputPortNb) ]
+        actionsOldInput = [parserOld.OFPActionDecNwTtl(), parserOld.OFPActionSetField(eth_src=new_mac_src1),
+                            parserOld.OFPActionSetField(eth_dst=new_mac_dst1),
+                            parserOld.OFPActionPushVlan(),parserOld.OFPActionSetField(vlan_vid=valTun),parserOld.OFPActionOutput(outputPortNb) ]
     
         #Pushing flow not considering BUFFER ID
         self.add_flow(priorDp, 65535, matchOldInput, actionsOldInput)
@@ -209,7 +206,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Handling packets that comes from the tunnel
 
         #MATCH : packets from vlan
-        matchOldOutput = parser.OFPMatch(vlan_vid=(0x1000 | tunID))
+        matchOldOutput = parserOld.OFPMatch(vlan_vid=valTun)
         #ACTIONS : desencapsulate + update mac @ + forward
         #Need to find a solution For resolving output port:
         #at worst asking flow table
@@ -219,11 +216,14 @@ class SimpleSwitch13(app_manager.RyuApp):
         #alsso need to resolve dest & src mac @
         new_mac_src2 = None#TODO
         new_mac_dst2 = None#TODO
-        actionsOldOutput = [parser.OFPActionPopVlan(),parser.OFPActionSetField(eth_src=new_mac_src2),
-                            parser.OFPActionSetField(eth_dst=new_mac_dst2),parser.OFPActionOutput(outputPortNb2)]
+        #actionsOldOutput = [parser.OFPActionPopVlan(),parser.OFPActionSetField(eth_src=new_mac_src2),
+        #                    parser.OFPActionSetField(eth_dst=new_mac_dst2),parser.OFPActionOutput(outputPortNb2)]
+
+        #try : loopback : vlan tag is removed and the packet is transferred to the local network interface as incomming packet
+        actionsOldOutput = [parserOld.OFPActionPopVlan(),parserOld.OFPActionOutput(ofpOld.OFPP_LOCAL,1)]
         
         #Pushing flow not considering BUFFER ID
-        #self.add_flow(priorDp, 1, matchOldOutput, actionsOldOutput)
+        self.add_flow(priorDp, 65535, matchOldOutput, actionsOldOutput)
 
 
         #New Network Side:
@@ -234,7 +234,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     
         #MATCH : if outcoming packets with host old @ as src @
         #match for ICMP only must be updated by the time
-        matchNewOutput = parser.OFPMatch(eth_type=0x86dd, ip_proto=58, ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+        matchNewOutput = parserNew.OFPMatch(eth_type=0x86dd, ip_proto=58, ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating MAC @+forward them to the new router
 
@@ -248,10 +248,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         #defining action list
 
         actionsNewOutput = [
-            parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src3),
-            parser.OFPActionSetField(eth_dst=new_mac_dst3),
-            parser.OFPActionPushVlan(),parser.OFPActionSetField(vlan_vid=valTun),
-            parser.OFPActionOutput(outputPortNb3) ]
+            parserNew.OFPActionDecNwTtl(), parserNew.OFPActionSetField(eth_src=new_mac_src3),
+            parserNew.OFPActionSetField(eth_dst=new_mac_dst3),
+            parserNew.OFPActionPushVlan(),parserNew.OFPActionSetField(vlan_vid=valTun),
+            parserNew.OFPActionOutput(outputPortNb3) ]
                             
 
         #Pushing flow not considering BUFFER ID
@@ -262,15 +262,15 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Handling packets that comes from the tunnel
         
         #MATCH : packets that come from vlan
-        matchNewInput = parser.OFPMatch((0x1000 | tunID))
+        matchNewInput = parserNew.OFPMatch(vlan_vid = valTun)
         #ACTIONS : desencapsulate + update MAC @ + forward on local network
         new_mac_src4=self.generateMAC(datapath.id,1)#local network interface
-        #TO PROBLEM : NO ACCESS TO packet : solution? reactive mode as case 2?
-        new_mac_dst4=None#TODO
-        actionsNewInput = [parser.OFPActionPopVlan(),parser.OFPActionSetField(eth_src=new_mac_src4),
-                            parser.OFPActionSetField(eth_dst=new_mac_dst4),parser.OFPActionOutput(1)]
+        #mac destination address is the hostID
+        new_mac_dst4=hostID
+        actionsNewInput = [parserNew.OFPActionPopVlan(),parserNew.OFPActionSetField(eth_src=new_mac_src4),
+                            parserNew.OFPActionSetField(eth_dst=new_mac_dst4),parserNew.OFPActionOutput(1)]
         #Pushing flow not considering BUFFER ID
-        #self.add_flow(datapath, 1, matchNewInput, actionsNewInput)
+        self.add_flow(datapath, 65535, matchNewInput, actionsNewInput)
 
     #When the first IP packet is received by the controller, it triggers the
     #collecting of all the topology information
