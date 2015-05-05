@@ -21,13 +21,29 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
-*Note April, 24:* Ping capabilities are still the same, the code has
- been split into several functions. It's now possible to generate
- the IPv6 address associated to a MAC address and a Network prefix,
- tunnelling set up has been cleaned : but still problems on MATCHS
- (apparently related to VLANs), 2 case out 4 may need to be installed
- in a reactive mode instead of a proactive mode as we need packet
- information for routing or setting up MAC addresses
+*Note May, 5:* Pushing Vlan troubles have been fixed, and now when an
+ host moves from a router to another (in turning down and up ethernet
+ interface and using MAC spoofing), ping packets from a third host are
+ encapsulated in a new Vlan by the old router and transferred to the
+ new one.
+
+Solved Issues : the Vlan ID is written on 4 bits and has to set the
+highest one to 1, then in our case an OR operation with 4096 is done
+to get the final vlan value. The priority has also been raised.
+
+Next Steps: being able to handle packets at the end of the tunnel with
+a reactive flow setting. It could be nice to understand the meaning of
+the OXM... header fields of open flow, that was the tricky point when
+pushing Vlans. 
+
+
+*Note April, 24:* Ping capabilities are still the same, the
+code has been split into several functions. It's now possible to
+generate the IPv6 address associated to a MAC address and a Network
+prefix, tunnelling set up has been cleaned : but still problems on
+MATCHS (apparently related to VLANs), 2 case out 4 may need to be
+installed in a reactive mode instead of a proactive mode as we need
+packet information for routing or setting up MAC addresses
 
  Solved Issues : as implementing node mobility with mininet seems
  quite complicated, a first solution is to create a static network
