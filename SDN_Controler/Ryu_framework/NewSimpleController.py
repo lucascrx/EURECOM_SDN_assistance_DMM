@@ -238,11 +238,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         insts = [parserOld.OFPInstructionActions(ofpOld.OFPIT_APPLY_ACTIONS,actionsOldOutput)]
         insts.append(parserOld.OFPInstructionGotoTable(1))
         mod = parserOld.OFPFlowMod(datapath=datapath, priority=65535, match=matchOldOutput,instructions=insts)
+        priorDp.send_msg(mod)
 
-
-        
         #Pushing flow not considering BUFFER ID
-        self.add_flow(priorDp, 65535, matchOldOutput, actionsOldOutput)
+        #self.add_flow(priorDp, 65535, matchOldOutput, actionsOldOutput)
 
 
         #New Network Side:
