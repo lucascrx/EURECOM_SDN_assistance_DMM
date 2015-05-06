@@ -112,6 +112,18 @@ class SimpleSwitch13(app_manager.RyuApp):
         
     #Already written function : enable the controller to send flow 
     #instructions : action and matches to a given switch
+    #
+    #customized with table number : now 2 tables :
+    #Table 0 : empty for normal scenario with default entry forwarded to table 1
+    #only the flow related to vlan oriented tunnel for mobility management are
+    #inserted in this table
+    #Table 1 : all the routing flow (eg for routing ping messages) are inserted in this
+    #table with default entry dropped.
+    #WHY 2 TABLES? when routing a packet outcomming from the tunnel toward the whole network
+    #we need first too strip down all the tunnel tag before routing it normally as if it were
+    #from the local network. 
+    #That means MATCH(from vlan) -> ACTION(strip tag) -> MATCH(dest @) -> ACTION(routing)
+    #only possible with 2 tables
     def add_flow(self, datapath, priority, match, actions, buffer_id=None, tblId=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -211,38 +223,19 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         #TODO : Flow Network <--- Host
         
-        # NOT IMPLEMENTED : BECAUSE OF THE PB OF THE DESENCAPSULATED
-        # PACKET ROUTING -> MAY BE LEAVE IT BLANK AND SET UP
-        # A FLOW REACTIVELY : when receiving packet from vlan....
-
         #Handling packets that comes from the tunnel
 
         #MATCH : packets from vlan
         matchOldOutput = parserOld.OFPMatch(vlan_vid=valTun)
-        #ACTIONS : desencapsulate + update mac @ + forward
-        #Need to find a solution For resolving output port:
-        #at worst asking flow table
-        #once decapsulated packet it has to be routed normally
-        #maybe output on ingress port...
-        outputPortNb2 = None#TODO
-        #alsso need to resolve dest & src mac @
-        new_mac_src2 = None#TODO
-        new_mac_dst2 = None#TODO
-        #actionsOldOutput = [parser.OFPActionPopVlan(),parser.OFPActionSetField(eth_src=new_mac_src2),
-        #                    parser.OFPActionSetField(eth_dst=new_mac_dst2),parser.OFPActionOutput(outputPortNb2)]
-
-        #try : loopback : vlan tag is removed and the packet is transferred to the local network interface as incomming packet
-      
+        #ACTIONS : desencapsulate + forward to routing table
         #Need to bypass add_flow function : because we are working with Instructions and not Actions
+        #Desencapsulation
         actionsOldOutput = [parserOld.OFPActionPopVlan()]
         insts = [parserOld.OFPInstructionActions(ofpOld.OFPIT_APPLY_ACTIONS,actionsOldOutput)]
+        #Forward to routing table (table 1)
         insts.append(parserOld.OFPInstructionGotoTable(1))
         mod = parserOld.OFPFlowMod(datapath=datapath, priority=65535, match=matchOldOutput,instructions=insts)
         priorDp.send_msg(mod)
-
-        #Pushing flow not considering BUFFER ID
-        #self.add_flow(priorDp, 65535, matchOldOutput, actionsOldOutput)
-
 
         #New Network Side:
         #Flow Network <--- Host:
@@ -621,6 +614,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             
                 match = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(ping_dst,'ffff:ffff:ffff:ffff::'))
                 print('ready to push flow to ',datapath)
+                #routing related flow then pushed to table 1
                 self.add_flow(datapath, 1, match, action,tblId=1)
                 print('flow pushed')        
                 

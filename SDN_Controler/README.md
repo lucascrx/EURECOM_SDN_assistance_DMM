@@ -25,21 +25,23 @@
  of the time empty and miss entries are forwarded to the second one
  that is composed by the routing policies (routing flow triggered by
  pings are inserted in this table). When tunnels are set up to handle
- mobility the related actions as pushing/popping Vlan + forwarding are
- inserted in the first table. This way a packet can have its vlan tag
- stripped and being normally forwarded in being considered as a flow of
- the first table and subsequently as a flow of the second one.
- Pinging from one host to a mobile one is now working! 
+ mobility the related actions as pushing/popping Vlan + forwarding to
+ the second table are inserted in the first table. This way a packet
+ can have its vlan tag stripped and being normally forwarded in being
+ considered as a flow of the first table and subsequently as a flow of
+ the second one.  Pinging between one host and a mobile one is now
+ working!
 
  Solved Issues : using tables is proper than finding a way to loop back
  over the switch and enable to set flow proactively, then as some of
  the packets has to be transferred from the first table to the other,
- OFPinstructionGotoTable has to be define and appended to the final
+ OFPinstructionGotoTable is defined and appended to the final
  instruction list.
 
  Next Step: handle properly subsequent hops across different networks,
- if possible handle the case when the user is back in its home network.
- Clean code and write a simple user manual.	  
+ if possible handle the case when the user is back in its home
+ network.  Clean code and write a simple user manual. Allow other
+ message than ping messages
 
 *Note May, 5:* Pushing Vlan troubles have been fixed, and now when an
  host moves from a router to another (in turning down and up ethernet
