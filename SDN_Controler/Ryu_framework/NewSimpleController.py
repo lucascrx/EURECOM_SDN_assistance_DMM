@@ -93,22 +93,34 @@ class SimpleSwitch13(app_manager.RyuApp):
         # 128, OVS will send Packet-In with invalid buffer_id and
         # truncated packet data. In that case, we cannot output packets
         # correctly.  The bug has been fixed in OVS v2.1.0.
+
+        #Table 0 miss entry : FORWARD TO TABLE 1
+
         match = parser.OFPMatch()
+        #actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
+        #ofproto.OFPCML_NO_BUFFER)]
+        insts = [parser.OFPInstructionGotoTable(1)]
+        priority = 1
+        mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match,instructions=insts)
+        datapath.send_msg(mod)
+        #self.add_flow(datapath, 0, match, actions)
+        
+        #Table 1 miss entry : DROP PACKET
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
-        self.add_flow(datapath, 0, match, actions)
-
+        self.add_flow(datapath, 0, match, actions, tblId=1)
+        
     #Already written function : enable the controller to send flow 
     #instructions : action and matches to a given switch
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, tblId=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
  
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,actions)]
         if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, priority=priority, match=match,instructions=inst)
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, priority=priority, match=match,instructions=inst,table_id=tblId)
         else:
-            mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst)
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst,table_id=tblId)
         datapath.send_msg(mod)
         
 
@@ -220,7 +232,14 @@ class SimpleSwitch13(app_manager.RyuApp):
         #                    parser.OFPActionSetField(eth_dst=new_mac_dst2),parser.OFPActionOutput(outputPortNb2)]
 
         #try : loopback : vlan tag is removed and the packet is transferred to the local network interface as incomming packet
-        actionsOldOutput = [parserOld.OFPActionPopVlan(),parserOld.OFPActionOutput(ofpOld.OFPP_LOCAL,1)]
+      
+        #Need to bypass add_flow function : because we are working with Instructions and not Actions
+        actionsOldOutput = [parserOld.OFPActionPopVlan()]
+        insts = [parserOld.OFPInstructionActions(ofpOld.OFPIT_APPLY_ACTIONS,actionsOldOutput)]
+        insts.append(parserOld.OFPInstructionGotoTable(1))
+        mod = parserOld.OFPFlowMod(datapath=datapath, priority=65535, match=matchOldOutput,instructions=insts)
+
+
         
         #Pushing flow not considering BUFFER ID
         self.add_flow(priorDp, 65535, matchOldOutput, actionsOldOutput)
@@ -603,7 +622,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             
                 match = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(ping_dst,'ffff:ffff:ffff:ffff::'))
                 print('ready to push flow to ',datapath)
-                self.add_flow(datapath, 1, match, action)
+                self.add_flow(datapath, 1, match, action,tblId=1)
                 print('flow pushed')        
                 
                 
