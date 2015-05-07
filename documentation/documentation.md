@@ -6,6 +6,11 @@ feel free to add whatever you think interesting for us even stuff that
 you've written yourself. May be we will need to think about a way to
 name all this docs properly for an (even) better organization.
 
+Note may, 07:
+
+In prevision of the report writting a new folder is set entierly
+related to the final report construction.
+
 NOTE march, 17:
 
 I have found a draft on the IETF  website (document called

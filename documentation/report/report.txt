@@ -1,0 +1,28 @@
+Semester Project : Spring 2015
+
+Distributed Mobility Management assisted by Software Defined
+Networking
+
+======================================================================
+
+
+----------------------------------------------------------------------
+TABLE OF CONTENT:
+
+1_ Mobility Management
+   1.1_ Existing solutions - History
+   1.2_ SDN oriented solution presentation
+   1.3_ Formalisation
+
+2_ Software Defined Networking
+   1.1_ Concept & controller presentation/comparaison
+   1.2_ network emulator : mininet
+   1.3_ Simple Router with Ryu
+
+3_ SDN oriented DMM implementation
+   1.1_ integration
+#TO CONTINUE
+----------------------------------------------------------------------
+
+
+   
