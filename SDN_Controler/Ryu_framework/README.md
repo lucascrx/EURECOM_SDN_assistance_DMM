@@ -43,18 +43,18 @@ Some details about Ryu Controller
 2- How to use Ryu Controller
 ----------------------------
 
-1. **Create the Network**:
+**1. Create the Network**:
 
 Launch the mininet topology example file located [here](https://github.com/lucascrx/EURECOM_SDN_assistance_DMM/blob/master/SDN_Controler/Topologies/topo3Routers3hostsTriangle.py).
 
-*COMMAND : $sudo python topo3Routers3hostsTriangle.py*
+       $sudo python topo3Routers3hostsTriangle.py
 
 You can use your own mininet configuration file but be sure to have a
 full related backbone and to set the interfaces number 1 of each
 switch as the local network interface.
 
 
-2. **Start Ryu Controller**
+**2. Start Ryu Controller**
 
 In parallel, start [ryu controller](https://github.com/lucascrx/EURECOM_SDN_assistance_DMM/blob/master/SDN_Controler/Ryu_framework/NewSimpleController.py),
 don't forget options!  verbose can be cumbersome some times but for
@@ -64,28 +64,28 @@ This controller uses an additional package :
 [mobilityPackage](https://github.com/lucascrx/EURECOM_SDN_assistance_DMM/tree/master/SDN_Controler/Ryu_framework/mobilityPackage),
 you have to install it also.
 
-*COMMAND : $bin/ryu-manager --observe-link --verbose ryu/app/NewSimpleController.py*
+    	 $bin/ryu-manager --observe-link --verbose ryu/app/NewSimpleController.py
 
-3. **Configure default routes** 
+**3. Configure default routes** 
 
 From mininet console, for each host (in the example there are 3 hosts,
 each linked to a different switch) configure its default route to the
 local switch.
 
-*COMMAND : mininet> h1 /sbin/route -A inet6 add default gw 2001::1*
+	mininet> h1 /sbin/route -A inet6 add default gw 2001::1
+	
+	mininet> h2 /sbin/route -A inet6 add default gw 2002::1
 
-	  *mininet> h2 /sbin/route -A inet6 add default gw 2002::1*
+	mininet> h3 /sbin/route -A inet6 add default gw 2003::1
 
-	  *mininet> h3 /sbin/route -A inet6 add default gw 2003::1*
-
-4. **learn IP addresses**
+**4. learn IP addresses**
 
 From mininet console, learn what are the Global IPv6 addresses of the
 hosts generated from the IPv6 auto-configuration procedure.
 
-*COMMAND : mininet> h1 ifconfig*
+      	mininet> h1 ifconfig
 
-5. **ping hosts** 
+**5. ping hosts** 
 
 You can ping the address you have just learned from a given host
 
@@ -93,23 +93,25 @@ The first ping messages will be lost since no buffering mechanism is
 set up. You can also ping switch's local network interface but not
 their backbone interfaces
 
-*COMMAND : mininet> h1 ping6 ..... *
+      mininet> h1 ping6 ..... 
 
-6. **playing with mobility**
+**6. playing with mobility**
 
 As no simple way with mininet prompt has been found to make an host
 move from a switch to another, the idea is to trick mininet into make
 it believe that h3 is h1. For that learn h1 MAC and IP address with
 ifconfig, then configure h3 mac address with the one of h1 :
-
-*COMMAND : mininet> ifconfig h3-eth0 down hw ... *
+	  
+      mininet> h3 ifconfig h3-eth0 down ether hw ... 
 
 Then add the h1 previous IP address to h3 :
 
-*COMMAND : mininet> ifconfig h3-eth0 inet6 add ... * 
+      mininet> h3 ifconfig h3-eth0 inet6 add ... 
 
 set the h3-etg0 interface up again and don't forget to set up the
 default route again.
+
+      mininet> h3 ifconfig h3-eth0 up
 
 Now if h2 pings h1 IP address h3 should reply and a vlan oriented
 tunnel should take place between s1 and s3.
