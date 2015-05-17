@@ -21,6 +21,20 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
+*Note May, 17:*Several Hops mobility is working as well as loop over
+ the network (when mobile node goes back to already visited network),
+ when the mobile node reaches a new network a new tunnel is created
+ between the current covering router and each old covering router
+ which is not really efficient as 4 flows are pushed for each tunnel.
+
+Solved Issue : when the user goes back to a already visited network,
+instead of defining a tunnel which would be meaningless, the incoming
+packet are simply transferred to the local interface.
+
+Next Steps: consider other kinds of packets to handle than icmpv6,
+discuss about the efficiency of the multi hops and looping handling
+method; finish the writing the explication text.
+
 *Note May, 6:*Two flow tables are finally used : the first one is most
  of the time empty and miss entries are forwarded to the second one
  that is composed by the routing policies (routing flow triggered by
