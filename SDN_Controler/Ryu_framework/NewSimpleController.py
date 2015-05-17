@@ -415,15 +415,28 @@ class SimpleSwitch13(app_manager.RyuApp):
             #if the list is empty there is nothing more to do
             #if not tunnels must be set up:
             if priorNetworks is not None:
-                
                 #creating tunnels with all the previous network and the current one
                 for priorDp in priorNetworks[:-1]:
-                    #Getting new tunnel identifier
-                    tunID = self.tunnelID
-                    self.tunnelID += 1
-                    #set up tunnel, host MAC @ is considered as identifier
-                    self.setUpTunnel(src,priorDp,datapath,tunID)
+                    if priorDp.id != datapath.id:
+                        #Getting new tunnel identifier
+                        tunID = self.tunnelID
+                        self.tunnelID += 1
+                        #set up tunnel, host MAC @ is considered as identifier
+                        self.setUpTunnel(src,priorDp,datapath,tunID)
+                    else:
+                        #if the network is back in a previously visited network
+                        #redirect the tunneled flow on the local interface
+                        priorPrefix = str('200')+str(priorDp.id)
+                        priorAddress = self.forgeHostGlobalIP(src,priorPrefix)
+                        matchBack = datapath.ofproto_parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+                        new_mac_src = self.generateMAC(priorDp.id,1)
+                        new_mac_dst = src
+                        actionsBack = [datapath.ofproto_parser.OFPActionDecNwTtl(), datapath.ofproto_parser.OFPActionSetField(eth_src=new_mac_src),
+                            datapath.ofproto_parser.OFPActionSetField(eth_dst=new_mac_dst),
+                                           datapath.ofproto_parser.OFPActionOutput(1) ]
+                        self.add_flow(datapath,65535,matchBack, actionsBack)
 
+                    
             #once flows are set up, router advertisement has to be sent
             #create RA including the allocated prefix (should consider multiple prefixes later) 
             #direct reply on the incomming switch port
