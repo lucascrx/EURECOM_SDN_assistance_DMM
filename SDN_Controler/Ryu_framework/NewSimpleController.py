@@ -201,7 +201,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         matchOldInput = parserOld.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating mac @+forward them to the new router
-        #Resolving output port
+         #Resolving output port
         outputPortNb = self.routing(priorDp.id,datapath.id)
         #set up mac addresses
         new_mac_src1 = self.generateMAC(priorDp.id,outputPortNb)
