@@ -43,26 +43,25 @@ Some details about Ryu Controller
 2- Technical Details about tunnels and flows
 --------------------------------------------
 
-Let's considere a strictly related backbone network with 4 Routers,
+Let's consider a strictly related backbone network with 4 Routers,
 each of them has a local interface that can host end node.  With this
-topology let's assume a communication between a Correspondant Node
+topology let's assume a communication between a Correspondent Node
 behind router 1 and a Mobile Node behind router 2 at the beginning.
 
 * **Routing related flows**
 
-When the Mobile Node hasn't moved yet from newtork 2 (ie the local
+When the Mobile Node hasn't moved yet from network 2 (ie the local
 network associated to the router 2), every communication will be
 carried out thanks to flows pushed to routers according to routing
-algorithm in the SDN controller : all this flows pushed by the
-routing intelligency take place on the 2nd flow table of each router
-which default entry policy is to drop the packet. The *Match*
-component is only based on the destination address and on the type of
-the ipv6 packet (it should be a "data" packet) and the *Action*
-component constists only in changing MAC addresses and forwarding
-the packet on the right output port.
-At this time the first flow table of router 2 is empty but as the
-default entry policy is forwarding to the second table, every packet
-is passed over it.
+algorithm in the SDN controller : all this flows pushed by the routing
+intelligence take place on the 2nd flow table of each router which
+default entry policy is to drop the packet. The *Match* component is
+only based on the destination address and on the type of the ipv6
+packet (it should be a "data" packet in the future) and the *Action*
+component consists only in changing MAC addresses and forwarding the
+packet on the right output port.  At this time the first flow table of
+router 2 is empty but as the default entry policy is forwarding to the
+second table, every packet is passed over it.
 
 * **Moving to a different network**
 
@@ -81,7 +80,7 @@ pushes two flows to the first table of router 2:
   encapsulated in a VLAN whose tag has the same value as the one used
   before. The first action consists in getting rid of the VLAN tag and
   then in relaying the new packet over the the second table so that it
-  will be examined as a normal packet from the local network and be
+  will be examined link a normal packet from the local network and be
   routed as usual to the external network.
 
 Then two other flows are pushed to the first table of router 3:
@@ -106,32 +105,41 @@ when there is an existing flow with the same matching properties in
 the flow table, only action component will be used to update the one
 of the existing flow.
 
-Then if the Mobile Node after having gone throught network 3, reaches
+Then if the Mobile Node after having gone through network 3, reaches
 network 4, there are 2 address now for which mobility is handled the
-one forged in newtork 3 and the older one forged in network 2. The
-mobility management of the first one is done exactly the same way as
-in the previous section. Then 2 flows are created on both router 3 and
-router 2 they are also exactly the same as the four flows described before
-two but they are not integrated the same way in the flow tables. The
-first idea is to create tunnels between the current hosting router and
-each visited router, here 2 tunnel are established : between router 4
-and router 3 and between router 4 and router 2 and the previously set
-up tunnel gets obsolete. 
+one forged in network 3 and the older one forged in network 2.Then 2
+new tunnels are established : one between router 4 and router 3 and
+between and one router 4 and router 2 and the previously set up tunnel gets
+obsolete. Therefore 2 new flow modification messages are pushed to
+router 2, 2 new flow modification messages are pushed to router 3 and
+2 times 2 new flow modifications messages are pushed to router 4
+following exactly the same method as the single handover scenario.
 
-On the 2 new flows pushed to router 2, the one dealing with packets
-going to the backbone has a new matching componnent as the VLAN tag
-has a new value associatied to a new tunnel. Unlike the other flow
-that deals with packets coming from the backbone for which the
-matching component is the same as the one of the flow pushed when the
-mobile node reached network 3 which is therefore updated with the
-action component of the new pushed flow. Now all the packets coming to
-router 2 with the address that the mobile node forged into newtork 2
-as destination address won't be anymore send in the tunnel for router
-3 but in the tunnel for router 4. The 3 others flow related to the
-tunnel between router 2 and router 3 becomes useless and will be
-deleted after a timeout.  
+On the 2 new flows pushed to router 2, the one matching packets coming
+from the backbone has its matching component (which is packet
+destination address equals to the address forged inside network 2)
+that is the same as the one of the flow pushed when the mobile node
+reached network 3 which is therefore updated with the action component
+of the new pushed flow. Now all the packets coming to router 2 with
+the address that the mobile node forged into network 2 as destination
+address won't be anymore send in the tunnel linked to router 3 but in
+the tunnel linked to router 4. The 3 others flow related to the tunnel
+between router 2 and router 3 becomes useless and will be deleted
+after a timeout.
 
-* **Going back to a visited network** ...TODO...
+* **Going back to a visited network**
+
+When the mobile node is goes back to network 2 after having visited
+network 3, new tunnels are set up between router 1 and router 2 and
+between router3 and router 2 exactly as a subsequent handover. But
+every packets that reaches router 2 from the backbone with destination
+address equals to the address the Mobile Node has forged in network 2
+are still send in a old tunnel to router 3 because they are matching
+with the flow pushed to router 2 when the mobile node moved to network
+3. To avoid this forwarding and get those packet delivered on the
+network 2, an new flow is pushed to router 2 with the same matching
+criteria as the old flow and overwrite its effect with an action
+component set to forward packets on the local interface.
 
 3- How to use Ryu Controller
 ----------------------------

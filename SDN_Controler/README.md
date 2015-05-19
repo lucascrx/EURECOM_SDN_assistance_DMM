@@ -33,7 +33,8 @@ packet are simply transferred to the local interface.
 
 Next Steps: consider other kinds of packets to handle than icmpv6,
 discuss about the efficiency of the multi hops and looping handling
-method; finish the writing the explication text.
+method; finish the writing the explication text. Think about make
+mininet instruction list more handy to execute.
 
 *Note May, 6:*Two flow tables are finally used : the first one is most
  of the time empty and miss entries are forwarded to the second one
