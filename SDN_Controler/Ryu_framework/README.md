@@ -48,6 +48,9 @@ each of them has a local interface that can host end node.  With this
 topology let's assume a communication between a Correspondent Node
 behind router 1 and a Mobile Node behind router 2 at the beginning.
 
+This scenario is illustrated by those [slides](https://github.com/lucascrx/EURECOM_SDN_assistance_DMM/tree/master/SDN_Controler/Ryu_framework/slides.pdf)
+that cover all what is explained below.
+
 * **Routing related flows**
 
 When the Mobile Node hasn't moved yet from network 2 (ie the local
