@@ -415,12 +415,22 @@ class SimpleSwitch13(app_manager.RyuApp):
             #if the list is empty there is nothing more to do
             #if not tunnels must be set up:
             if priorNetworks is not None:
+                #maintaining a list in order to know when to stop in the tunnel creation/updating
+                #and in order not to create a tunnel that will be updated in the same procedure
+                updatedTunnels=[]
                 #creating tunnels with all the previous network and the current one
                 for priorDp in priorNetworks[:-1]:
+                    
+                    #Getting new tunnel identifier, a tunnelID is build with
+                    #the concatenation of the old router ID and the new router ID
+                    tunID = int(str(priorDp.id)+str(datapath.id))
+                    #when a already updated tunnel is met, it is skipped
+                    if tunID in updatedTunnels:
+                        continue;
+                    #else it's registered to the list and the procedure is launched
+                    updatedTunnels.append(tunID)
+                    
                     if priorDp.id != datapath.id:
-                        #Getting new tunnel identifier
-                        tunID = self.tunnelID
-                        self.tunnelID += 1
                         #set up tunnel, host MAC @ is considered as identifier
                         self.setUpTunnel(src,priorDp,datapath,tunID)
                     else:

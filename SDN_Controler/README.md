@@ -21,11 +21,21 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
-*Note May, 17:*Several Hops mobility is working as well as loop over
- the network (when mobile node goes back to already visited network),
- when the mobile node reaches a new network a new tunnel is created
- between the current covering router and each old covering router
- which is not really efficient as 4 flows are pushed for each tunnel.
+*Note May, 28:* Subsequent tunneling has been made proper : now only
+one tunnel is set up for a given direction between to given routers
+then we avoid accumulating outdated tunnels. The tunnel updating has
+been also modified in order to avoid subsequent updates of the same
+tunnel when one node moves to a new network. As project is reaching
+its end, from now progress will be less and less frequent...
+
+Next steps: make the correspondent node moves also.
+
+ Note May, 17:*Several Hops mobility is working as well as
+*loop over the network (when mobile node goes back to already visited
+*network), when the mobile node reaches a new network a new tunnel is
+*created between the current covering router and each old covering
+*router which is not really efficient as 4 flows are pushed for each
+*tunnel.
 
 Solved Issue : when the user goes back to a already visited network,
 instead of defining a tunnel which would be meaningless, the incoming
