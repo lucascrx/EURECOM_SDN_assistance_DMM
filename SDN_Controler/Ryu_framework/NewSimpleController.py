@@ -69,8 +69,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.bindingList = {}
         #keep trace of the previous visited network
         self.mobTracker = mobilityTracker.MobilityTracker()
-        #Vlan identifier to be incremented whil they are created
-        self.tunnelID = 1
+
         #As no special event triggered when the systeme is on
         #main mode, the routing configuration is done at the
         #reception of the first message : then set to TRUE untill
