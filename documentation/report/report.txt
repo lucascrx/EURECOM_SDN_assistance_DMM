@@ -9,19 +9,40 @@ Networking
 ----------------------------------------------------------------------
 TABLE OF CONTENT:
 
-1_ Mobility Management
-   1.1_ Existing solutions - History
-   1.2_ SDN oriented solution presentation
-   1.3_ Formalisation
+1_ Project Context and Environement 
+(On which resources and technologies we lean on for the project)
+   1.1_ Mobility Management Standardized solutions
+   	1.1.1_ MIPv6 
+      	1.1.2_ PMIPv6
+   1.2_ DMM solution
+   	1.2.1_ SDN general idea and scheme + openflow
+	       1.2.1.1_ general presentation of SDN concept 
+	       1.2.1.2_ Technical presentation of OpenFlow (1.3) [X]
+	1.2.2_ DMM protocol presentation
+	       1.2.2.1_ Components of the architecture
+	       1.2.2.2_ Description message exchanges
+      
+2_ Project tools
+   2.1_ SDN controller framework
+   	2.1.1_ existing frameworks and comparison (ODL, Ryu, Pox)
+   	2.1.2_ Available ressources on Ryu (Documentation, Projects)
+   2.2_ network emulator : mininet [X]
+   	2.2.1_ interraction between mininet and the controller 
+	(what information can be accessed)
+	2.2.2_ topology limitation and constrains.
 
-2_ Software Defined Networking
-   1.1_ Concept & controller presentation/comparaison
-   1.2_ network emulator : mininet
-   1.3_ Simple Router with Ryu
-
-3_ SDN oriented DMM implementation
-   1.1_ integration
-#TO CONTINUE
+3_ Project Implementation [X]
+   3.1_ Enhance a simple switch in a real router
+   	3.1.1_ discovering underlaying topology
+	3.1.2_ handling icmpv6 control messages
+	3.1.3_ taking routing decision
+	3.1.4_ push flows to switches
+   3.2_ Handle hosts mobility across the network
+   	3.2.1_ Detecting new host and retrieving its history (previously visited network)
+	3.2.2_ Setting up tunnels
+   3.3_ Observation and results
+   	3.3.1_ ping exchanges
+	3.3.2_ flow tables
 ----------------------------------------------------------------------
 
 
