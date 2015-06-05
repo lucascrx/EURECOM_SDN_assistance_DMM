@@ -1,0 +1,406 @@
+Semester Project : Spring 2015
+SDN assisted DMM
+Project Report, Part III Project Implementation
+----------------------------------------------------------------------
+
+* 3.1 Enhance a simple switch in a real router
+
+The implementation of the SDN controler, has been written from the
+code of simple_switch.py provided in the Virtual Machine dirstibuted
+by SDNhub.com. The initial code is quite limited and allows a switch
+to handle message (only icmp echo reply and request) forwarding between
+hosts directely linked to it. Then to improve the code to get a
+controller able to achieve the previously described DMM solution the
+first step is to enable the controller with router capabilities which
+involves making it aware of the underlaying topology, making it handle
+the icmpv6 control messages received by the switches and then making
+it order switches to forward packets across the network. Those steps
+are respectively described below.
+
+** 3.1.1 Discovering the topology and building routing tables
+
+First, to enable the Ryu controller to access to the nodes and the
+links between them, it has to be launched with the "--observe-link"
+option. I guess that in order to build data structures where those
+topology information are stored, the controller uses the LLDP messages
+exchanged by the switches when the network is just created. That is
+why this option allows the controller to registers all the switches of
+the network and all the links between then but it can't retrieve any
+information about the hosts.
+
+An important point is as we didn't find any way to find out when the
+discovery procedure was done, ie detecting the instant when the
+topology data structures are fully completed, our controller waits for
+the reception of the first ping message by one of the switches of the
+network to start reading into those data structures. Indeed we assume
+that ping messages are exchanged long time after the whole network
+discovery has been done.
+
+The function called collectRoutingInfo has been created in the purpose
+to first access to the topology details (swithes and links) obtained
+during the discovery phase, using the topology module of Ryu.
+
+         #All the topology informations are obtained from the app_manager
+        appManager = app_manager.RyuApp()
+        #Collecting switches and links informations
+        self.switchList = ryu.topology.api.get_all_switch(appManager)
+        self.linkList = ryu.topology.api.get_all_link(appManager)
+
+** 3.1.2 Designing a new Addressing scheme
+
+*** TODO provide details on the addresing plan itself
+
+*** implementing addressing plan
+Once every connection between every switch is registered, using an
+array of arrays called bindingList, the collectRoutingInfo() function
+assignes an IPv6 address to every interfaces of every switches. This
+address depends on the identifiers of the switch itself and the
+current port but also on the identifier of the switch on the other
+side of the link.
+
+        for link in self.linkList:
+            if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
+                self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
+                self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
+
+Moreover each switches is supposed to have a local interface where its
+local network is bound to, our controller imposes that it has to be
+the interface number 1, then like before an IPv6 address is also
+assigned to local interfaces:
+
+        for switch in self.switchList:
+            self.bindingList[switch.dp.id,1]='200'+str(switch.dp.id)+'::1'
+            #initilizing coveredHosts dictionnary:
+
+It's important to understand that all this generated IP address are
+never known the switches, indeed the controller never transmit them
+but the flows and the orders it will push the routers will be forged
+according to this new addressing plan. Then all the addresses provided
+by mininet or the netork simulator become useless and moreover, as you
+can see later, switches MAC address are also virtually re-written the
+same way.
+
+** 3.1.3 Handling ICMPv6 control messages
+
+One of the function of an IPv6 router is to be able to handle ICMPv6
+control messages. 
+
+*** a. Router Solicitation message
+
+The first type of ICMPv6 a router is willing to receive is Router
+Solicitation message, when one host gets bound to its local interface,
+this message is forwarded to the controller since the switch doesn't
+know how to handle it and since no flow matching this kind of message
+is never ever pushed down to it. Then the controller first retrieves
+the identity of the solicitating host thanks to its mac address, from
+this, the controller checks if the host is comming from a previous
+network and if its mobility has to be ensured and trigger or not the
+mobility management procedure, this point will be explained in a later
+in the report. Finally the controller forges a Router Advertisement
+message that it transmits to the solicited switch in order to be
+relayed on the local network interface. 
+
+*** b. Neighbor Solicitation message
+
+Then switches also forward to the controller the neighbor solicitation
+messages that can be split up into subcategories.  An host can send a
+neighbor solicitation in order to resolve the MAC address associated
+to a given IP address, in this case the option field of the router
+solicitation message is not empty, and the controller checks if the
+target IP address is one virtually allocated addressses of the
+solicited switch, if yes the controler forges the corresponding
+neighbor advertisement message and transmits it to the switch for
+being relayed. If the option field of the router solicitation message
+is null that means that this messages has been sent by the host for
+address conflict resolution purposes, in this case, as address
+conflicts are not considered, the controller just registers the host
+to the solicitated switch's covered hosts list.
+
+*** c. Echo request & reply
+
+For the previous messages that involve a response from the switch,
+as this response is build from elements contained in the request, it
+is not possible or quite cumbersome to set up flows on the switches in
+order to make those solicitations not go anymore through the
+controller. Indeed the solution would constist in pushing flows
+matching every single version of the Router or Neighbor solicitation
+messages that could have been received. That is why it has been
+choosen to make the switches forward every single solicitation to the
+controller that forge the custom response messages and send them back
+to the switches.
+
+Echo request and response messages are also divided on different
+categories but this time based on their destination. Indeed if the
+message is addressed to one of the switch's addresses, the controller
+in case of echo request, forges the response and forward it to the
+switch (no flows are pushed down here). 
+
+If the destination address is not one the switch, the controller
+checks it's domain and figures out either if the message has to be
+send on the switch's local interface of has to be forwarder to another
+switch, precisely the one that host the destination domain. Indeed
+since our controller impose to have a stricly related newtork of
+switches there is at most two switches between two hosts. Here for the
+first time flow are pushed to the switch from the controler, they are
+matching the received message and enable the switch to forward
+autonomously the next similar ping messages either on its local
+interface using the registered hosts list to set the MAC destination
+address or either toward another switch and where the output interface
+had been resolved using a routing function explained in the next
+part.
+
+As the output interface resolving is based on the prefix of the
+desination address, and since switch interfaces linked to other
+switches have all the same prefix, a ping whose destination address is
+a backbone interface (every interface but not the local one) of a
+switch that is not the one hosting the ping sender can't be routed and
+then forwarded.
+
+** 3.1.4 Packet switching
+
+The last (but not least) functionnality that has to be provided to our
+controller is make switches forward packets on the right output
+interface according to packets' destination address. As the type of
+network we are working on is simple : composed only by edges routers
+all linked to each others and whose interface number 1 is dedicated to
+their local network, packets switching is not a difficult operation.
+The idea is to spot in the link list previously built the link between
+the switch that has to forward the packet and to the one hosting the
+destination address. The output interface is just the one where the
+link is plugged on the first of those two switches.
+
+** 3.1.5 pushing routing flows to switches
+
+As we previously saw the controller can gives order to a switch in two
+different ways, either it specifies a punctual action either it pushes
+a new flow to it. In this second case every packet matching the flow
+received by the router won't be relayed to the controller but will be
+treated as descibed by the flow. It's way for the controller not to be
+sollicited for similar messages and repeat the same puncutal action to
+carry out. Then when the first ping message of sequence is transmited
+to the controller by a switch that doesn't know how to handle it, the
+controller build flow that matches the destination address and the
+type (icmpv6) of this ping message and which action is to forward on
+the resolved output interface thanks to the routing function. Finally
+this flow is pushed down to the switch that is now able to forward the
+next similar ping messages without refering to the controller.
+
+OpenFlow allows flows to be grouped into ordered tables and then to
+link those tables together, then we define 2 tables : the first one,
+(table number 0) is dedicated to flows related to mobility handling
+and for which the default entry policy is forwarding to the second the
+second table (table number 1) which is dedicated to the flow related to
+classic message forwarding.  Then for each switch, when a packet is
+received, it checks if it matches one of the entry of the first table,
+if not it checks if it matches one of the entry of the second table,
+if not the packet is transfered to the controller. If a packet matches
+an entry the associated action is carried out and the next packet is
+treated.
+
+Then our routing flows just build up which indicate to the switch
+the forwarding interface for a given destination address are pushed to
+the second flow tables of the switches, and the first one remains
+empty for the moment.
+
+
+Once all this functionnalities described untill now are implemented in
+the controller, switches are now able to forward ping exchanges
+between any nodes of the network. That is the first step for our
+controler, and now it has to be enhanced with mobility management
+capabilities.
+
+* 3.2 Handle host mobility across the network
+
+Host mobility is ensured first in keeping track of them all across the
+network, indeed the list of the previously visited networks is stored
+for each host, so that when a host gets to a new network, all the old
+ones registered on the list are involved in the mobility management
+procedure.
+
+** 3.2.1 Detecting New host and retrieving its history
+
+When a host gets connected for the first time to a switch it sends a
+router solicitation message, those messages are relayed to the
+controller that checks the MAC source address in order to figure out
+the identity of the host. Thanks to the mobility module, the
+controller keeps in memory a dictionnary where every host identifier
+is linked to the list of networks the host has visited.  If the last
+network of this list is the same as the one where the router
+solicitation comes from, that means that the host hasn't moved then no
+mobility management procedure is triggered.
+
+** 3.2.2 Setting up tunnels
+   
+When a host is detected as having moved from one network to another, a
+mobility management procedure is launched constisting in building a
+tunnel between the switch responsible of the network currently visited
+by the host and each of the previously visited network's switch. In
+this way all the messages addressed to an address that the host has
+forged in a old network will be forwarded in the host's current
+network. In the reverse direction, when the host sends a message with
+a old IP address as source address, this message is tunneled to the
+switch controling the newtork where this old address has been built
+(no route optimization) before been forwarded toward the final
+destination.
+
+*** a. Properties:
+
+It has been choosen to implement those tunnels with Vlan tags, as it
+only deals with the layer 2, it makes things easiers for switches.
+Moreover tunnels are shared between hosts, only one tunnel exists
+between two given switches for a given direction, through which are
+exchanged messages concerning all the hosts with mobility service
+involving those two switches. The first host that goes from a network
+A to a netork B will trigger the establishment of a tunnel between the
+associated switches and every next host that do the same crossing from
+A to B will have its message going conveyed through this same
+tunnel. Tunnels are unidirectionals in the sense that they convey
+messages (in both directions) to ensure mobility for a host from a
+network A to a newtork B, if the host goes back to A from B another
+tunnel will be used.
+
+*** b. Implementation:
+
+A tunnel between a previously visited network switch A and the
+currently visited newtok switch B is set up by the controller in
+pushing two flows, this time related to hosts mobility, first the to
+the first table of switch A:
+
+    The first one matches packets coming from the network whose
+    destination address is the one the Mobile Node forged when it was
+    in network A. The associated action is pushing a VLAN tag with a
+    given value on those packets, changing MAC addresses and
+    forwarding packets to router B.
+
+    The second one matches packets coming directly from router B and
+    encapsulated in a VLAN whose tag has the same value as the one
+    used before. The first action consists in getting rid of the VLAN
+    tag and then in relaying the new packet over the the second table
+    so that it will be examined like a normal packet from the local
+    network and be routed as usual to the external network.
+
+Then two other flows are pushed to the first table of router B:
+
+    The first one matches all the received packet on the local network
+    interface whose source address is the one of the Mobile Node
+    forged when it was in network A. The associated action is to push
+    a VLAN tag with the same value as before, to change MAC addresses
+    and then to forward packets to router A.
+
+    The second one matches packets from router A that include a VLAN
+    tag with the same value as before. The associated action consists
+    in stripping VLAN tag, changing MAC addresses and forwarding packets
+    on the local interface.
+
+The value used for the VLAN tag then depends only on routers A and B,
+then different packets from different communications will be tagged
+with the same value between A and B.
+
+** 3.2.3 Advanced mobility
+
+It's important to keep in mind that the mobile host may not only go
+from one network to another but may roam across many different ones
+and also go back to previously visited network. Therefore the tunnel
+establishement algorithm described before is a trade between having a
+simple sequence of operations to be done by the controller and try not
+to make switches flow table soaring after host have roamed for a
+while, that is why shared tunnel solution has be selected.
+
+**** a. Subsequent Handover
+
+When the mobile node after having left its home network A to go to
+network B, changes again of network and goes to network C. There are
+now two address for which mobility have to be ensured : the one
+acquired in network A and the one acquired in B, that means that two
+tunnels have to be set up : one between switch A and switch C and
+another between switch B and switch C, moreover the previously tunnel
+from A to B must not be used anymore for handlin mobility of this
+mobile node. Once installed into a switch a flow can be updated when a
+new flow whith the same matching criterias is pushed to the switch,
+this is what happens when the host gets to network C. At this time two
+tunnel flows are installed into switch A : one ensures that every
+packet going to the mobile node address is forwarded in a vlan tunnel
+toward B, let's call this flow FA1. The other one ensures that every
+packets going from the vlan tunnel is piped to the routing table,
+let's call it FA2. When the mobile node reaches network C, a new vlan
+tunnel is set up between switches A and C, FA1 is then updated because
+a new flow matching every packets going to mobile node address is
+pushed, and makes the switch A forwards them into the new vlan-tunnel
+toward C. The second new pushed flow matches packets based on a new
+vlan tag, then it doesn't update FA2 as tunnels between A and B and
+between A and C use different tag. Then switch A has now 3 flows in
+its tunnel flow table : two of them handle host mobility into network
+C and the last one is now useless for the considered host but still
+important to handle mobility of other mobile nodes that have moved
+from network A to network B.
+
+The two new flows pushed to switch B when the mobile node gets in
+network C are exactely analog to the one pushed to switch A when the
+host moved to network B, but they are associated with the new vlan
+tunnel between switch B and switch C. One of the two already existing
+flows related to the vlan tunnel established with switch A, was in
+charge of forwarding packets caming from the tunnel to network B
+interface, let's call it FB1. The other one was matching packets with
+mobile node address as source address and sending them into the
+tunnel, let's call it FB2. As the mobile node is not anymore in
+network B, FB2 becomes completely useless, but FB1 is still used for
+other mobile nodes that have moved from network A to network B.
+
+Two pairs of flow are then pushed to switch C they are analog to the
+pair pushed to switch B when the mobile node reached network B from
+network A, but one pair is related to the tunnel between switch A and
+switch C and the other to the tunnel between switch B and switch C.
+
+**** b. Complexity:
+
+In this scenario of subsequent handover, when the node gets to network
+C, 8 flows are pushed by the controller, and every time a mobile node
+moves to a new network, n time 4 flows will be pushed with n the
+number of visited networks. Indeed the fact of having simple flow
+pushing algorithm makes the number of OpenFlow messages quite
+important. However, our method doesn't present a great space
+complexity regading to switches flow tables, and especially for the
+first flow table. Indeed as tunnel are shared, pushed flows are still
+usefull for other mobile node except the previously called FB2 which
+becomes unused untill the mobile node is back to network B.
+
+**** c. Back to a visited network 
+
+If our mobile node, after having visited network C, keeps roaming and
+goes back to network B, mobility of the the address acquired in
+network A and of the one acquired in network C have to be ensured,
+moreover packets going to the address that the mobile node has forged
+in network B doesn't have to be transfered in a tunnel anymore.  Then
+two flows are pushed to switch A and two others are pushed to switch B
+and as they are exactly the same as the one pushed when the host moved
+first from network A to network B (the vlan tag is still the same), there
+won't have new flows in switch A and switch B's flow table.
+
+Two other pairs of flow are pushed to switch C and switch B again,
+but as we said tunnel are unidirectionnal in the sense that one
+tunnel ensure mobility between two switch for a given direction, then
+two more entries are written in both switch B and switch C's flow
+table.
+
+Packets going to the address that the mobile node forged into
+newtork B when it got there for the first time were matched by a flow
+entry that sent them into the tunnel between switch B and switch C.
+Now this flow entry is updated with the push of a same matching flow
+that forward packets on the local network interface of the switch.
+
+**** d. complexity
+
+When the mobile nodes goes back to a previously visited network, old
+flow entries are used again, and then flow table size doesn't become
+very high. As each mobile node is associated to the list of the
+networks that he visited, if it goes back to previous networks,
+several networks can occur multiple time on the list, then in order to
+avoid subsequent flow pushing dealing with the same tunnel the
+controller when handling mobile node handover, keeps in memory wich
+tunnel has already be updated in order not to send flows updating an
+already updated tunnel.
+
+* 3.3 Observations, results and benchmaks
+
+
+
