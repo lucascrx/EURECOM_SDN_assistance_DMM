@@ -1,10 +1,12 @@
 Semester Project : Spring 2015
 SDN assisted DMM
-Project Report, Part III Project Implementation
-----------------------------------------------------------------------
+Project Report, 
+======================================================================
+
+* Part III Project Implementation
+* ----------------------------------------------------------------------
 
 * 3.1 Enhance a simple switch in a real router
-
 ** Introduction
 The implementation of the SDN controler, has been written from the
 code of simple_switch.py provided in the Virtual Machine dirstibuted
@@ -18,7 +20,7 @@ the icmpv6 control messages received by the switches and then making
 it order switches to forward packets across the network. Those steps
 are respectively described below.
 
-** 3.1.1 Discovering the topology and building routing tables
+** 3.1.1 Discovering the topology
 
 First, to enable the Ryu controller to access to the nodes and the
 links between them, it has to be launched with the "--observe-link"
@@ -401,19 +403,199 @@ controller when handling mobile node handover, keeps in memory wich
 tunnel has already be updated in order not to send flows updating an
 already updated tunnel.
 
-* 3.3 Observations, results and benchmaks
+* 3.3 Observations and results 
 ** Introduction
 This part is following the steps of what is suposed to be presented
 during the final presentation, its role is to illustrate and make
 clearer the concepts presented in the previous section.
 
-** 3.3.1 Network topology and classic pinging
+** 3.3.1 Network topology and simple ping
 *** a. Topology
 Let's considere a strictly related newtork of 4 routers where each
 one of them has a host linked to its local interface as shown below:
 **** TODO INSERT NETWORK PLAN AND PROVIDE CODE IN APPENDIX
 Once both mininet and the controller are launched, after few seconds
-host get configured with global IPv6 addresses :
+host get configured with global IPv6 addresses:
+**** TODO insert picture h1_autoconfiguration.png
+     
+*** b. Simple Ping
+To enable host to send messages, thay have to be given a default
+route, here the local router is the default route, 
+**** TODO insert picture hosts_routeConfiguration.png
+From now hosts are able to ping each other, the first ping messages
+won't be conveyed to their destination as the flow are getting pushed
+to switches but once they received all the information from the
+controller, messages are well relayed. Here is an example with h2
+pinging h1's address : 
+**** TODO insert picture h2_ping_h1.png
 
 
+The first message of this series of ping has triggered flow pushing
+to the second flow table of s1 and s2, at the begining those tables
+were empty and now they get populated with the occurence of new ping
+messages, here is the content of the flow tables of s2.
+**** TODO insert s2_dumpflows.png
 
+** 3.3.2 Simulating one hop mobility
+
+As making hosts move from one router to another with mininet looks
+possible to implement in a python script, but not with command line
+instruction. The idea to overcome this issue is to use IP and MAC
+spoofing inside the network. Indeed let's configure h3 with the same
+addresses as h1 while h1 is turned of, as h3 presents h1 identifiers
+the controller will treat it as if it was h1.
+
+**** TODO insert h3_spoofs_h1.png
+
+Now if h2 pings again h1's address, ping messages are still well
+exchanged but now the ttl of the ping response is equal to 61 whearas
+it was equal to 62 before, that means that there is one more hope now
+on the path from h2 to h1's address. Using a packet sniffer it is
+possible to see ping messages going from s2 to s1 and then being
+relayed to s3, h1's address mobility is then provided.
+**** TODO insert picture h2_ping_h1spoofed.png
+
+Ping messages are now received and treated by h3 that now plays the
+role of h1 as we can see from a packet capture on h3's interface:
+
+**** TODO insert picture h3_tcpdump.png
+
+Flow tables have been updated, the first flow table of s1 is now
+containing two flows that transfer packets going to h1's address in
+the tunnel toward s3.
+
+**** TODO insert s1_dumpflows.png
+
+** 3.3.3 Simulating advanced mobility
+
+Let's now turn h3 off and make h4 impersonate h1 exactly as the same
+way we did before with h3, the controller will then believe that h1
+has now moved from s3 coverage to s4 coverage.  Then ping messages go
+now through a new tunnel between s1 and s4, and second tunnel is set
+up between s3 and s4, we can retrieve them with the dump of s4 flow
+table:
+
+**** TODO insert s4_dumpflows.png
+
+When the mobile node moves back under s3 coverage after having
+visited s4 network, flow tables are updates and ping messages are now
+routed again to s3 and s3 now forwards packets going to h1'address
+not anymore on a tunnel but on its local interface, here is s3 flow
+table when h3 spoofes h1 again:
+
+**** TODO insert s3_dumpflows.png  
+
+
+* Part IV Futur Enhancements and Conclusion
+* ----------------------------------------------------------------------
+
+* 4.1 Enhancements
+** 4.1.1 Network topology constrains
+*** a. Stricly related switch backbone
+A major enhancement of the current program would consist in making the
+controller more open to different network topology, currently all the
+switches of the network has to be linked together. This simplification
+has been choosed in order to keep routing alorithm simple, but it's a
+hypotesis that is quite far from real world network topology. In the
+program the algorithm constists in finding the switch that host the
+destination node thanks to the destination address of the packet, and
+then find the interface to which the link leading to this switch is
+plugged from the link table. 
+
+A solution can be to have a topology with the shape of a star, with
+one switch at the middle is linked to all the other around him, and
+the surrounding switch just forward packets to it as if it was their
+default gateway. There controller would have to care about the switch
+it's dealing with because routing policies would't be the same for all
+the switches.
+
+*** b. Allow multiple local interface
+
+A second constrain is that only the first interface of each switch
+must be dedicated to its local network. As mininet doesn't allow two
+hosts sharing the same switch interface, our program doesn't work with
+a network where multiple host are behind the same switch.
+
+Adding several local interfaces involve many changes on the program as
+switches would have to resolve output interface for packets going to
+hosts thay are hosting. If mobility is not ensured, it's simple but
+for a given switch when packets are comming from a shared tunnel with
+a destination address forged in another network, this switch has to
+know how to route it toward the right local interface. But if the
+same packet is comming to the switch but not through a tunnel this
+packet has to be forwarded on the backbone, to the associated switch.
+This involves to introduce two different and independant routing
+rules, that can be done with a third table.
+
+Moreover the case of an host that changes the interface to which it
+is linked to a switch has to be handled, all the flows of the third
+table related to host addresses would have to be updated.
+ 
+*** c. Make the controller independant of interface order
+
+Another optimisation that comes along with the previous one would be
+to make the conrtroller completly independant with how switch
+interface are configured if they are linked to other switches of host.
+The one toward the switches can be obtained from the topology data
+structure build by mininet and the other can be spotted out at the
+reception of router or neighbor solicitation messages.
+
+** 4.1.2 Controller algorithms 
+*** a. Having less flow to push
+We already said that each time a node moves to a new network after
+having visited n networks, 4 time n flows has to be pushed down by the
+controller. Then after a while it can turns out to be lot of flow to
+send for the controller. In order to limit this number a new way to
+handle mobility would be only to set up a tunnel between the switch
+of the just network left by the host and the one of the newtork just
+reached, then mobility would be ensured with this series of tunnel
+bound one after the other one among which switches would forward
+packets going to the address the mobile node has forged under their
+coverage but also packets going to the address the mobile has forged in
+the network visited before : comming from the serie of tunnel. 
+
+*** b. Handling the first packets of flow
+As routing flows are pushed reactively the first packets of a serie
+that triggers a flow pushing are lost. This can be avoided in
+implementing a buffering mechanism inside the controller or in making
+it tell switches to forward those packets to their destination
+while flows are being set up.
+
+*** c. Handling other types than icmpv6
+Flows pushed to both the first or the second flow table of each switch
+match ipv6 ping messages packet, this has to be changed in the future
+to allow other types of message to be treated. The question then is
+gather all the network traffic type in one general matching flows or
+assign specific flows for each supported protocol.
+
+*** d. Introducing access control to mobility service
+As mobility management is presented as a service it would be nice to
+control which user can use it. Then the implementation of a policy
+decision an enforcement entity could be done which would be consulted
+when a new user shows up in the network. The authentication can be
+first based on the mac address, and then on more advanced criterias. 
+
+** 4.1.3 Interaction with mininet
+*** a. Make hosts move for real
+Yet a way to make host moves from one switch to antother within the
+mininet virtual network hasn't been found, that is why our way was to
+trick the SDN controller with addresses spoofing. But as hosts doesn't
+properly move in our simulation we do not really know how the system
+really reacts and may be the messages exchanged between the mobile
+node and the switch are not exactelly the same. It appears that
+allocating several local network interfaces on switches may help but
+this involve changes of the controller behaviour as described
+before.
+
+*** b. From comand line to a batch program
+Our demonstration has been done in typing one by one all the mininet
+instructions that turns out to be quite the same, it would make the
+interaction with mininet easier and faster especially during the test
+phases to load once an instruction file instead of writing them all
+every single time. 
+ 
+* 4.2 Conclusion
+** 4.2.1 Status and scope of the program
+what is it doing? limitation? why is it limited?
+** 4.2.2 Context, how can it be used in real life 
+** 4.2.3 Personal impressions
