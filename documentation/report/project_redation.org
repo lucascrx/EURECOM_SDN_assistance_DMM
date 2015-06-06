@@ -5,6 +5,7 @@ Project Report, Part III Project Implementation
 
 * 3.1 Enhance a simple switch in a real router
 
+** Introduction
 The implementation of the SDN controler, has been written from the
 code of simple_switch.py provided in the Virtual Machine dirstibuted
 by SDNhub.com. The initial code is quite limited and allows a switch
@@ -210,7 +211,7 @@ controler, and now it has to be enhanced with mobility management
 capabilities.
 
 * 3.2 Handle host mobility across the network
-
+** Introduction
 Host mobility is ensured first in keeping track of them all across the
 network, indeed the list of the previously visited networks is stored
 for each host, so that when a host gets to a new network, all the old
@@ -401,6 +402,18 @@ tunnel has already be updated in order not to send flows updating an
 already updated tunnel.
 
 * 3.3 Observations, results and benchmaks
+** Introduction
+This part is following the steps of what is suposed to be presented
+during the final presentation, its role is to illustrate and make
+clearer the concepts presented in the previous section.
+
+** 3.3.1 Network topology and classic pinging
+*** a. Topology
+Let's considere a strictly related newtork of 4 routers where each
+one of them has a host linked to its local interface as shown below:
+**** TODO INSERT NETWORK PLAN AND PROVIDE CODE IN APPENDIX
+Once both mininet and the controller are launched, after few seconds
+host get configured with global IPv6 addresses :
 
 
 
