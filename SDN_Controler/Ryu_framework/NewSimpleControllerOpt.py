@@ -69,7 +69,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         #links List obtained from the app_manager
         self.linkList = []
         #dictionary set up for routing purpose :
-        #(datapathID,port_no) is associated to the one hope neighbor
+        #(datapathID,port_no) is associated to the ip address of the interface
         self.bindingList = {}
         #keep trace of the previous visited network
         self.mobTracker = mobilityTracker.MobilityTracker()
@@ -123,15 +123,14 @@ class SimpleSwitch13(app_manager.RyuApp):
     #Already written function : enable the controller to send flow 
     #instructions : action and matches to a given switch
     #
-    #customized with table number : now 2 tables :
+    #customized with table number : now 3 tables :
     #Table 0 : empty for normal scenario with default entry forwarded to table 1
     #only the flow related to vlan oriented tunnel for mobility management are
     #inserted in this table
     #Table 1 : all the routing flow (eg for routing ping messages) are inserted in this
     #table with default entry dropped.
-    #WHY 2 TABLES? when routing a packet outcomming from the tunnel toward the whole network
-    #we need first too strip down all the tunnel tag before routing it normally as if it were
-    #from the local network. 
+    #Table 2 : exaclty the same role as table 0 but for local host forwarding
+    #this table is only accessible by table 0 flows explicit forwarding in action field
     #That means MATCH(from vlan) -> ACTION(strip tag) -> MATCH(dest @) -> ACTION(routing)
     #only possible with 2 tables
     def add_flow(self, datapath, priority, match, actions, buffer_id=None, tblId=0):
@@ -288,7 +287,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Flow Network --> Host:
 
         #Handling packets that comes from the tunnel
-        
         #MATCH : packets that come from vlan
         matchNewInput = parserNew.OFPMatch(vlan_vid = valTun)
         
@@ -323,7 +321,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         #linksConnection = [str(link.src.dpid)+str(link.src.port_no)+str(link.dst.dpid) for link in self.linkList]
             
         #Once topology is known, addresses IP are distributed:
-           
         #Creating backbone interfaces and binding them to port and switches
         for link in self.linkList:
             if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
@@ -343,8 +340,6 @@ class SimpleSwitch13(app_manager.RyuApp):
     #Packet handler
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
-        #print("===============NEW PACKET===============")
-        
         # If you hit this you might want to increase 
         # the "miss_send_length" of your switch
         if ev.msg.msg_len < ev.msg.total_len:
@@ -417,15 +412,13 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_to_port.setdefault(dpid, {})
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
         print("Details : packet in ", dpid, src, dst, in_port)
-       
-
         #once protocols are known, it's time to prepare answers
  
         #temporary solution : here no authentication protocol
         #every user are granted
         found=1
         
-        #In case of Router Sollicitation
+        #In case of Router Solicitation
         if((itype == 1)&(found == 1)):
             
             #checking if the incomming port is not a backbone port:
@@ -454,8 +447,6 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.bindingList[dpid,in_port]='2'+'0'*nbrZeros+str(dpid)+'::'+str(in_port)
 
             print ('local host registration : host : ', eth.src , ' registered under ',dpid,' coverage at interface number ',in_port)
-                
-
             #Mobility Management Procedure is fired
             
             #Asking for the list of the prior network
@@ -624,15 +615,11 @@ class SimpleSwitch13(app_manager.RyuApp):
             #destination is the current router 
             
             #fetching all the local addresses of the current switch
-            localAddressesList = []
-            for localPort in range(1,len(self.switchList)+1):
-                localAddressesList.append(self.bindingList[dpid,localPort])
-           
+            localAddressesList = [ self.bindingList[localPort] for localPort in self.bindingList.keys() if localPort[0]==dpid ]
+
             if ping_dst in localAddressesList :
                 print('ping addressed to the router')
                 #the ping is addressed to the switch:
-                #!!!! not really working only with local network interfaces
-                #!!!!not working with backbones interfaces!!!
                 #if it's a request : reply
                 if itype == 4:
                     #copy request data into the reply
@@ -662,14 +649,20 @@ class SimpleSwitch13(app_manager.RyuApp):
             else:
                 print('ping another host or switch received by ', dpid, 'going to', ping_dst)
 
-                #TODO : handle ping to backbone interface of a distant router
-                
                 #first step : finding out the destination switch
-
                 #now only host pinging is considered (no ping to backbone intf of remote switch)
-                extractedDomain = re.match(r"20+(?P<trgDpid>[1-9]{1,3})",ping_dst[0:4])
+                extractedDomain = re.match(r"20*(?P<trgDpid>[1-9]{1,3})",ping_dst[0:4])
                 #getting the dpid covering the destination host
                 extractedDpid = int(extractedDomain.group('trgDpid'))
+                
+                if extractedDpid is None :
+                    #if extractedDpid is None it mean that dest address begins with 2000:
+                    #this is a backbone interface ip address
+                    #
+                    #extracting the switch to which this interface belongs
+                    extractedDest = re.match(r".+:{1,2}(?P<trgDpid>[0-9]{1,4})$",ping_dst)
+                    extractedDpid = int(extractedDest.group('trgDpid'))
+
                 #checking validity of the obtained dpid
                 if extractedDpid in [s.dp.id for s in self.switchList]:
                     print ('ping going to ', ping_dst , ' must be routed to ', str(extractedDpid) ,' as destination domain is ', ping_dst[0:4])

@@ -3,6 +3,14 @@ SDN assisted DMM
 Project Report, 
 ======================================================================
 
+* Part II
+
+*** TODO matching criterias
+*** TODO action & instructions , priority 
+*** TODO pushing flows vs ponctual orders 
+*** TODO flow gathered in table, table relachionship (general)
+
+
 * Part III Project Implementation
 * ----------------------------------------------------------------------
 
@@ -21,6 +29,8 @@ it order switches to forward packets across the network. Those steps
 are respectively described below.
 
 ** 3.1.1 Discovering the topology
+*** TODO now recognizing backbones interfaces using mininet data struture
+
 
 First, to enable the Ryu controller to access to the nodes and the
 links between them, it has to be launched with the "--observe-link"
@@ -48,11 +58,9 @@ during the discovery phase, using the topology module of Ryu.
         #Collecting switches and links informations
         self.switchList = ryu.topology.api.get_all_switch(appManager)
         self.linkList = ryu.topology.api.get_all_link(appManager)
-
-** 3.1.2 Designing a new Addressing scheme
-
+ 
+*** TODO 1 rewrite physical backbone addressing with a virtual addressing: MAC and IP @ filling up bindingList
 *** TODO provide details on the addresing plan itself
-
 *** implementing addressing plan
 Once every connection between every switch is registered, using an
 array of arrays called bindingList, the collectRoutingInfo() function
@@ -81,15 +89,11 @@ but the flows and the orders it will push the routers will be forged
 according to this new addressing plan. Then all the addresses provided
 by mininet or the netork simulator become useless and moreover, as you
 can see later, switches MAC address are also virtually re-written the
-same way.
 
-** 3.1.3 Handling ICMPv6 control messages
-
-One of the function of an IPv6 router is to be able to handle ICMPv6
-control messages. 
-
+** 3.1.3 Handling ICMPv6 configuration messages
 *** a. Router Solicitation message
-
+**** TODO 1 register host and allow intf discovering too after checking : completing bindingList
+**** TODO 2 covered host dictionnary built up , ipv6 address guessing au 
 The first type of ICMPv6 a router is willing to receive is Router
 Solicitation message, when one host gets bound to its local interface,
 this message is forwarded to the controller since the switch doesn't
@@ -104,6 +108,9 @@ message that it transmits to the solicited switch in order to be
 relayed on the local network interface. 
 
 *** b. Neighbor Solicitation message
+**** TODO 1 two type of NS only smth done when option field not null:node tries to resolve switch mac @
+**** TODO 2 all the registration done at RS reception, not handling address
+conflicts cases 
 
 Then switches also forward to the controller the neighbor solicitation
 messages that can be split up into subcategories.  An host can send a
@@ -119,8 +126,10 @@ address conflict resolution purposes, in this case, as address
 conflicts are not considered, the controller just registers the host
 to the solicitated switch's covered hosts list.
 
-*** c. Echo request & reply
-
+**** TODO 3 other icmpv6 control msg not handled (RA,NA) as controller redesignes network topology 
+** 3.1.4 ICMPv6 Echo request & reply
+*** TODO 1 ping toward one of the router intf : scanning bindingList of the switch : no flow pushed, just ponctual order
+*** TODO 2 ping toward another entity : other switch backbone intf / local nw intf , local host, remote host finding output intf : flow pushed 
 For the previous messages that involve a response from the switch,
 as this response is build from elements contained in the request, it
 is not possible or quite cumbersome to set up flows on the switches in
@@ -159,7 +168,9 @@ a backbone interface (every interface but not the local one) of a
 switch that is not the one hosting the ping sender can't be routed and
 then forwarded.
 
-** 3.1.4 Packet switching
+** 3.1.5 Flow organisation 
+*** TODO 1 routing related flows in table 1 anticipation of table 0
+*** TODO 2 switches become autonomous
 
 The last (but not least) functionnality that has to be provided to our
 controller is make switches forward packets on the right output
@@ -172,7 +183,7 @@ the switch that has to forward the packet and to the one hosting the
 destination address. The output interface is just the one where the
 link is plugged on the first of those two switches.
 
-** 3.1.5 pushing routing flows to switches
+
 
 As we previously saw the controller can gives order to a switch in two
 different ways, either it specifies a punctual action either it pushes
@@ -221,6 +232,7 @@ ones registered on the list are involved in the mobility management
 procedure.
 
 ** 3.2.1 Detecting New host and retrieving its history
+*** TODO 1 mobility management treatment at router sol. reception : from its Trace
 
 When a host gets connected for the first time to a switch it sends a
 router solicitation message, those messages are relayed to the
@@ -233,6 +245,8 @@ solicitation comes from, that means that the host hasn't moved then no
 mobility management procedure is triggered.
 
 ** 3.2.2 Setting up tunnels
+*** TODO 1 tunnel aim and properties : vlan (why?), unidirectionnel
+*** TODO 2 implementation using flows : old input, new output : ok (@ip retrieving) / old output : table 0 / new input : table 3 ; tables relashionnship 
    
 When a host is detected as having moved from one network to another, a
 mobility management procedure is launched constisting in building a
@@ -568,6 +582,9 @@ to allow other types of message to be treated. The question then is
 gather all the network traffic type in one general matching flows or
 assign specific flows for each supported protocol.
 
+*** TODO d. Handle address confict within the same sub network
+    with other host, we suppose that the node compute it global ip@
+    the same way as the controller
 *** d. Introducing access control to mobility service
 As mobility management is presented as a service it would be nice to
 control which user can use it. Then the implementation of a policy
