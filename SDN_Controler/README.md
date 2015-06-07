@@ -21,6 +21,24 @@
 * **Topologies** is a folder where virtual networks are designed to test
   SDN controllers.
 
+*Note June, 8:* Some big changes have finally occured, controller has
+ been changed in order to make switch independant on the way their
+ interfaces are configured : there is no more topology constrain
+ related to switches' interfaces now. They can have several local
+ interfaces in any order. Code has also been cleaned on tiny points
+ (robustness). Report plan has then changed then some points has to be
+ changed. 
+
+Solved Issue : in inserting a third table in a symetric way as the
+table n°0 it is now possible for switches to have multiple local
+interfaces. It is also now possible for switches to relay ping
+messages going to any interface of another switch.
+
+Next Steps : finish and adapt the final report, continue code cleaning.
+It would be nice to think about making controler working with a non
+strictly related backbone : tunnel establishement seems to be the
+tricky point of this enhancement.
+
 *Note May, 28:* Subsequent tunneling has been made proper : now only
 one tunnel is set up for a given direction between to given routers
 then we avoid accumulating outdated tunnels. The tunnel updating has
@@ -30,12 +48,12 @@ its end, from now progress will be less and less frequent...
 
 Next steps: make the correspondent node moves also.
 
- Note May, 17:*Several Hops mobility is working as well as
-*loop over the network (when mobile node goes back to already visited
-*network), when the mobile node reaches a new network a new tunnel is
-*created between the current covering router and each old covering
-*router which is not really efficient as 4 flows are pushed for each
-*tunnel.
+*Note May, 17:* Several Hops mobility is working as well as
+loop over the network (when mobile node goes back to already visited
+network), when the mobile node reaches a new network a new tunnel is
+created between the current covering router and each old covering
+router which is not really efficient as 4 flows are pushed for each
+tunnel.
 
 Solved Issue : when the user goes back to a already visited network,
 instead of defining a tunnel which would be meaningless, the incoming
