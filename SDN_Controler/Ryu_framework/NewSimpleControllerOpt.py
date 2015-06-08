@@ -182,6 +182,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         print arrayMAC
         #aggregation 2 by 2
         globalIParray = [arrayMAC[i]+arrayMAC[i+1] for i in range(0,7,2)]
+        #compression if case of 0 just after the '::'
+        if globalIParray[0][0]=='0':
+            #normaly globalIParray[0][1] is never null as unicast mac addresses
+            globalIParray[0]=globalIParray[0][1:]
         globalIParray.insert(0,prefix+':')
         #forging string from array
         globalIPstring = ":".join(globalIParray)
@@ -446,7 +450,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             if (dpid,in_port) not in self.bindingList.keys():
                 self.bindingList[dpid,in_port]='2'+'0'*nbrZeros+str(dpid)+'::'+str(in_port)
 
-            print ('local host registration : host : ', eth.src , ' registered under ',dpid,' coverage at interface number ',in_port)
+            print ('local host registration : host : ', eth.src , ' registered under ',dpid,' coverage at interface number ',in_port, 'with ip@ :', newAddress )
             #Mobility Management Procedure is fired
             
             #Asking for the list of the prior network
@@ -665,7 +669,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
                 #checking validity of the obtained dpid
                 if extractedDpid in [s.dp.id for s in self.switchList]:
-                    print ('ping going to ', ping_dst , ' must be routed to ', str(extractedDpid) ,' as destination domain is ', ping_dst[0:4])
+                    print ('ping going to ', ping_dst , ' must be routed to router ', str(extractedDpid) ,' as destination domain is ', ping_dst[0:4])
                 #handle the case where no sub domain is found
                 else:
                     print ('no subdomain found deleting packet')
@@ -677,7 +681,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                     #checking if the ping destination is linked to one of the local interfaces
                     print('ping toward local network, resolving local interface')
                     if ping_dst not in self.coveredHosts[destDpid].keys():
-                        print('destination host is not linked to the domain switch, deleting packet')
+                        print('destination: ', ping_dst ,' host is not linked to the domain switch, deleting packet')
                         return 0
                     #if destination host is linked to the switch, resolving the interface
                     outputIntf = self.coveredHosts[destDpid][ping_dst][1]
