@@ -80,6 +80,11 @@ class SimpleSwitch13(app_manager.RyuApp):
         #the end.
         self.RoutingDone = False
 
+        #new datastructure for allowing no strictly related switch backbone
+        #dictionnary where each switch is associated to the list of its neighbor
+        #{'switch1': set(['switch2', 'switch3']),'switch2': set(['switch1]),..}
+        self.networkGraph={}
+
     #All ready written function
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -144,6 +149,39 @@ class SimpleSwitch13(app_manager.RyuApp):
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst,table_id=tblId)
         datapath.send_msg(mod)
         
+    #ROUTING RELATED FUNCTIONS, case of none stricly related backbone:
+
+    #function that find the possible path between 2 switches
+    #uses breath first algorithm
+    def bfs_paths(self, start, goal):
+        graph = self.networkGraph;
+        queue = [(start, [start])]
+        while queue:
+            (vertex, path) = queue.pop(0)
+            for next in graph[vertex] - set(path):
+                if next == goal:
+                    yield path + [next]
+                else:
+                    queue.append((next, path + [next]))
+    
+    #function that call the previous one to get the shortest path
+    def shortest_path(self, start, goal):
+        try:
+            return next(self.bfs_paths(start, goal))
+        except StopIteration:
+            return None
+
+    #function that return the gateway to a packet when the final
+    #destination is not directly conected to the relaying switch.
+    #..this function is not optimized as it build all the path to the dest
+    #and only select the 2nd element of the list
+    def next_hop(self,start,goal):
+        completePath = self.shortest_path(start,goal)
+        print('path from', start ,' to ', goal , ' : ', completePath)
+        #the returned path as at least of length 2 as it contains src and dest
+        next_hop = completePath[1] 
+        return next_hop
+
 
     #return the port number from witch the datapath with 
     #dpid = source can reach the datapath with dpid = dest
@@ -182,10 +220,17 @@ class SimpleSwitch13(app_manager.RyuApp):
         print arrayMAC
         #aggregation 2 by 2
         globalIParray = [arrayMAC[i]+arrayMAC[i+1] for i in range(0,7,2)]
-        #compression if case of 0 just after the '::'
-        if globalIParray[0][0]=='0':
-            #normaly globalIParray[0][1] is never null as unicast mac addresses
-            globalIParray[0]=globalIParray[0][1:]
+
+        #compression if case of 0 just after one ':'
+        for index, sequence in enumerate(globalIParray):
+            zerosToReplace=0
+            for byte in sequence:
+                if byte != '0':
+                    break
+                zerosToReplace=zerosToReplace+1
+            #we get the number of 0 to delete
+            globalIParray[index] = sequence[zerosToReplace:]
+
         globalIParray.insert(0,prefix+':')
         #forging string from array
         globalIPstring = ":".join(globalIParray)
@@ -194,7 +239,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     
 
     #Set up tunnel for traffic forwading in mobility handling
-    def setUpTunnel(self, hostID,priorDp,datapath,tunID):
+    def setUpTunnel(self, hostIPadd,priorDp,datapath,tunID):
         
         parserOld = priorDp.ofproto_parser
         ofpOld = priorDp.ofproto
@@ -208,24 +253,20 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Handling incomming packets with the old host @
         #as destination @
 
-        #we must retreive what was the host @ in this network
-        #Compute old prefix
-        nbrZeros=3-len(str(priorDp.id))
-        priorPrefix='2'+'0'*nbrZeros+str(priorDp.id)
-        #priorPrefix = str('200')+str(priorDp.id)
-        #If not working, @ recording must be set up!!!
-        priorAddress = self.forgeHostGlobalIP(hostID,priorPrefix)
+        priorAddress = hostIPadd
                     
         #MATCH : if incoming packets that try to reach host old @
         #match for ICMP only must be updated by the time
-        matchOldInput = parserOld.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+        matchOldInput = parserOld.OFPMatch( eth_type=0x86dd, ip_proto=58,vlan_vid=0x000, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating mac @+forward them to the new router
-         #Resolving output port
-        outputPortNb = self.routing(priorDp.id,datapath.id)
+
+        #Resolving next hop and output port
+        nextHop1ID = self.next_hop(priorDp.id,datapath.id)
+        outputPortNb = self.routing(priorDp.id,nextHop1ID)
         #set up mac addresses
         new_mac_src1 = self.generateMAC(priorDp.id,outputPortNb)
-        new_mac_dst1 = self.generateMAC(datapath.id,self.routing(datapath.id,priorDp.id))
+        new_mac_dst1 = self.generateMAC(nextHop1ID,self.routing(nextHop1ID,priorDp.id))
 
         #the value of the vlan has to set the highest of the 4 bits of OFPVID_PRESENT to 1
         #the effective value is then 0x1000 | tunnID and 0x1000 = 4096
@@ -265,24 +306,26 @@ class SimpleSwitch13(app_manager.RyuApp):
                     
         #MATCH : if outcoming packets with host old @ as src @
         #match for ICMP only must be updated by the time
-        matchNewOutput = parserNew.OFPMatch(eth_type=0x86dd, ip_proto=58, ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+        matchNewOutput = parserNew.OFPMatch(eth_type=0x86dd, ip_proto=58, vlan_vid=0x0000, ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                     
         #ACTIONS : Decrement TTL (not enabled)+ encapsulate them in new VLAN+ updating MAC @+forward them to the new router
 
+        #Resolving next hop
+        nextHop2ID=self.next_hop(datapath.id,priorDp.id)
         #Resolving output port
-        outputPortNb3 = self.routing(datapath.id,priorDp.id)
+        outputPortNb2 = self.routing(datapath.id,nextHop2ID)
         #set up mac addresses
-        new_mac_src3 = new_mac_dst1
-        new_mac_dst3 = new_mac_src1
+        new_mac_src2 = self.generateMAC(datapath.id,outputPortNb2)
+        new_mac_dst2 = self.generateMAC(nextHop2ID,self.routing(nextHop2ID,datapath.id))
 
 
         #defining action list
 
         actionsNewOutput = [
-            parserNew.OFPActionDecNwTtl(), parserNew.OFPActionSetField(eth_src=new_mac_src3),
-            parserNew.OFPActionSetField(eth_dst=new_mac_dst3),
+            parserNew.OFPActionDecNwTtl(), parserNew.OFPActionSetField(eth_src=new_mac_src2),
+            parserNew.OFPActionSetField(eth_dst=new_mac_dst2),
             parserNew.OFPActionPushVlan(),parserNew.OFPActionSetField(vlan_vid=valTun),
-            parserNew.OFPActionOutput(outputPortNb3) ]
+            parserNew.OFPActionOutput(outputPortNb2) ]
                             
 
         #Pushing flow not considering BUFFER ID
@@ -299,17 +342,67 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Desencapsulation
         actionsNewInput = [parserNew.OFPActionPopVlan()]
         instsNew = [parserNew.OFPInstructionActions(ofpNew.OFPIT_APPLY_ACTIONS,actionsNewInput)]
-        #Forward to routing table (table 1)
+        #Forward to remote local address table (table 2)
         instsNew.append(parserNew.OFPInstructionGotoTable(2))
         modNew = parserNew.OFPFlowMod(datapath=datapath, priority=65535, match=matchNewInput,instructions=instsNew)
         datapath.send_msg(modNew)
-        # new_mac_src4=self.generateMAC(datapath.id,1)#local network interface
-        # #mac destination address is the hostID
-        # new_mac_dst4=hostID
-        # actionsNewInput = [parserNew.OFPActionPopVlan(),parserNew.OFPActionSetField(eth_src=new_mac_src4),
-        #                     parserNew.OFPActionSetField(eth_dst=new_mac_dst4),parserNew.OFPActionOutput(1)]
-        # #Pushing flow not considering BUFFER ID
-        # self.add_flow(datapath, 65535, matchNewInput, actionsNewInput)
+        
+
+        #as no more strictely related network, tunnel may go through switches
+        #they have to know how to relay packets
+        crossedSwitches = self.shortest_path(priorDp.id,datapath.id)
+        for index,intSwitch in enumerate(crossedSwitches[1:-1]):
+            #setting index to the one corresponding to switch position in the original list
+            realIndex = index + 1
+            #get associated datapath
+            intDp = [switch.dp for switch in self.switchList if switch.dp.id == intSwitch][0] 
+            print(intSwitch ,' is intermediate tunnel node, datapath fetched : ')
+            print(intDp)
+            print('**********')
+            parserInt = intDp.ofproto_parser
+            ofpInt = intDp.ofproto
+            #direction of the packet based on the position of the mobile address
+            #direction resolving could be proper...
+            
+            #DIRECTION 1 : from old network to new visited network : INPUT
+
+            #match : valn tagged and mobile @ is destination address 
+            matchIntInput = parserInt.OFPMatch( eth_type=0x86dd, ip_proto=58, vlan_vid=valTun , ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+            #must be forwarded to the right neighbor on the crossedSwitch list
+            #Resolving output port
+            nextHopID = crossedSwitches[realIndex+1]
+            outputPortNbInt1 = self.routing(intDp.id,nextHopID)
+            #set up mac addresses
+            new_mac_srcInt1 = self.generateMAC(intDp.id,outputPortNbInt1)
+            new_mac_dstInt1 = self.generateMAC(nextHopID,self.routing(nextHopID,intDp.id))
+            #defining action list
+            actionsIntInput = [parserInt.OFPActionDecNwTtl(), parserInt.OFPActionSetField(eth_src=new_mac_srcInt1),
+                        parserInt.OFPActionSetField(eth_dst=new_mac_dstInt1),
+                               parserInt.OFPActionOutput(outputPortNbInt1) ]
+    
+            #Pushing flow not considering BUFFER ID
+            self.add_flow(intDp, 65535, matchIntInput, actionsIntInput)            
+
+            #DIRECTION 2 : from new visited network to old network : OUTPUT
+
+            #match : valn tagged and mobile @ is source address 
+            matchIntOutput = parserInt.OFPMatch( eth_type=0x86dd, ip_proto=58,  ipv6_src=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'), vlan_vid=valTun )
+            #must be forwarded to the left neighbor on the crossedSwitch list
+            #Resolving output port
+            nextHopID2 = crossedSwitches[realIndex-1]
+            outputPortNbInt2 = self.routing(intDp.id,nextHopID2)
+            #set up mac addresses
+            new_mac_srcInt2 = self.generateMAC(intDp.id,outputPortNbInt2)
+            new_mac_dstInt2 = self.generateMAC(nextHopID2,self.routing(nextHopID2,intDp.id))
+            #defining action list
+            actionsIntOutput = [parserInt.OFPActionDecNwTtl(), parserInt.OFPActionSetField(eth_src=new_mac_srcInt2),
+                                parserInt.OFPActionSetField(eth_dst=new_mac_dstInt2),
+                                parserInt.OFPActionOutput(outputPortNbInt2) ]
+    
+            #Pushing flow not considering BUFFER ID
+            self.add_flow(intDp, 65535, matchIntOutput, actionsIntOutput)
+            print('setting up tunnel done between :',priorDp.id,' and :',datapath.id)
+
 
     #When the first IP packet is received by the controller, it triggers the
     #collecting of all the topology information
@@ -330,11 +423,36 @@ class SimpleSwitch13(app_manager.RyuApp):
             if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
                 self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
                 self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
+
+            #populating networkGraph for routing algorithms:
+            if link.src.dpid not in self.networkGraph.keys():
+                self.networkGraph[link.src.dpid]=[]
+            if link.dst.dpid not in self.networkGraph.keys():
+                self.networkGraph[link.dst.dpid]=[]
+            self.networkGraph[link.src.dpid].append(link.dst.dpid)
+            self.networkGraph[link.dst.dpid].append(link.src.dpid)
+
+            #populating networkGraph for routing algorithms:
+            # if link.src not in self.networkGraph.keys():
+            #     self.networkGraph[link.src]=[]
+            # if link.dst not in self.networkGraph.keys():
+            #     self.networkGraph[link.dst]=[]
+            # self.networkGraph[link.src].append(link.dst)
+            # self.networkGraph[link.dst].append(link.src)
+
+        #when all the link have been scanned we change netorkGraph dictionnary
+        #values from list to set of list in order to enable routing algorithm
+        for switch in self.networkGraph.keys():
+            self.networkGraph[switch]=set(self.networkGraph[switch])
+        print 'network graph constructed:'
+        print self.networkGraph
+
         #inserting local network interfaces in the binding list
         for switch in self.switchList:
             #registration of local interfaces in the bindingList is done when a neighbor solicitation is received
             #initilizing coveredHosts sub-dictionnary:
             self.coveredHosts[switch.dp.id]={}
+            print ('covered host dictionnary for switch ', switch.dp.id , 'initialized')
         print('ROUTING CONFIGURATION DONE')
         print(self.bindingList)
         #The routing is done only once
@@ -444,11 +562,16 @@ class SimpleSwitch13(app_manager.RyuApp):
             #registering or updating host in the current router
             hostDetails = (eth.src,in_port)
             self.coveredHosts[dpid][newAddress]=hostDetails
+            
+            print ('coveredHost updated : switch ', dpid)
+            print self.coveredHosts
 
             #registering the interface in the bindingList
             #done if the interface is not discovered already (dynamic linking),             
             if (dpid,in_port) not in self.bindingList.keys():
                 self.bindingList[dpid,in_port]='2'+'0'*nbrZeros+str(dpid)+'::'+str(in_port)
+                print ('bindingList updated : switch ', dpid)
+                print self.bindingList
 
             print ('local host registration : host : ', eth.src , ' registered under ',dpid,' coverage at interface number ',in_port, 'with ip@ :', newAddress )
             #Mobility Management Procedure is fired
@@ -471,7 +594,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 updatedTunnels=[]
                 #creating tunnels with all the previous network and the current one
                 for priorDp in priorNetworks[:-1]:
-                    
+                    print('###########SETTING UP TUNNEL############')
                     #Getting new tunnel identifier, a tunnelID is build with
                     #the concatenation of the old router ID and the new router ID
                     tunID = int(str(priorDp.id)+str(datapath.id))
@@ -481,14 +604,28 @@ class SimpleSwitch13(app_manager.RyuApp):
                     #else it's registered to the list and the procedure is launched
                     updatedTunnels.append(tunID)
 
-                    nbrZeros=3-len(str(priorDp.id))
-                    priorPrefix='2'+'0'*nbrZeros+str(priorDp.id)
-                    #priorPrefix = str('200')+str(priorDp.id)
-                    priorAddress = self.forgeHostGlobalIP(src,priorPrefix)
+                    #fetching IP addr the host forged in the previous network
+                    #in asking coveredHost dict with the provided MAC @
+                    priorAddress = None 
+                    for ipAddress in self.coveredHosts[priorDp.id].keys():
+                        #comparing MAC addresses
+                        if self.coveredHosts[priorDp.id][ipAddress][0]==src:
+                            priorAddress=ipAddress
+                            break
+                    else:
+                        #if the mac address is not associated to any ip address, exit
+                        print('the host with mac @ : ',src,' has never visited ' , priorDp.id , ' here is its covered Hosts : ')
+                        print( self.coveredHosts[priorDp.id])
+                        return 0;
+
+                    # nbrZeros=3-len(str(priorDp.id))
+                    # priorPrefix='2'+'0'*nbrZeros+str(priorDp.id)
+                    # #priorPrefix = str('200')+str(priorDp.id)
+                    # priorAddress = self.forgeHostGlobalIP(src,priorPrefix)
                     
                     if priorDp.id != datapath.id:
                         #set up tunnel, host MAC @ is considered as identifier
-                        self.setUpTunnel(src,priorDp,datapath,tunID)
+                        self.setUpTunnel(priorAddress,priorDp,datapath,tunID)
                         print('tunnel set up from ', priorDp.id, ' to ', datapath.id)
                         #Each previously built address is included in a proactively pushed flow for
                         #forwarding on the input interface which is registered in table 3 of the new
@@ -518,11 +655,12 @@ class SimpleSwitch13(app_manager.RyuApp):
                         #redirect the tunneled flow on the local interface
                         print('Mobile node ',src,' is back to network ', dpid)
                         matchBack = datapath.ofproto_parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
-                        new_mac_src = self.generateMAC(priorDp.id,1)
+                        output_port = in_port
+                        new_mac_src = self.generateMAC(priorDp.id,output_port)
                         new_mac_dst = src
                         actionsBack = [datapath.ofproto_parser.OFPActionDecNwTtl(), datapath.ofproto_parser.OFPActionSetField(eth_src=new_mac_src),
                             datapath.ofproto_parser.OFPActionSetField(eth_dst=new_mac_dst),
-                                           datapath.ofproto_parser.OFPActionOutput(1) ]
+                                           datapath.ofproto_parser.OFPActionOutput(output_port) ]
                         self.add_flow(datapath,65535,matchBack, actionsBack)
                         print('Tunnel flow pushed to switch ' ,datapath.id ,' to make packets going to ', priorAddress, ' going to local network again')
 
@@ -539,9 +677,9 @@ class SimpleSwitch13(app_manager.RyuApp):
             srcIP = self.generateLL(dpid,in_port)
             ip = ipv6(nxt=inet.IPPROTO_ICMPV6, src=srcIP, dst=str(i.src))
             #setting up prefix : the dependant Local Network prefix is returned
-            nbrZeros=3-len(str(dpid))
-            prefix='2'+'0'*nbrZeros+str(dpid)+'::1'
-            #prefix = '200'+str(dpid)+'::1'            
+            #nbrZeros=3-len(str(dpid))
+            #prefix='2'+'0'*nbrZeros+str(dpid)+'::1'
+            prefix=self.bindingList[dpid,in_port]
             icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT, data=icmpv6.nd_router_advert(ch_l=64, rou_l=4, options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400, pre_l=14400, prefix=prefix)]))
             pkt_generated.add_protocol(e)
             pkt_generated.add_protocol(ip)
@@ -566,17 +704,33 @@ class SimpleSwitch13(app_manager.RyuApp):
                 #link layer address request
 
                     #check if the solicited @ is the one of the router 
+                    #fetching all the local addresses and the associated port of the current switch
                     trgPort = None
-                    for localPort in range(1,len(self.switchList)+1):
-                        if str(trg)==(self.bindingList[dpid,localPort]):
-                            trgPort = localPort
-                            break;
+                    localAddressesIntfList = [ [self.bindingList[localPort],localPort[1]] for localPort in self.bindingList.keys() if localPort[0]==dpid ]
+
+                    addrList = [addr[0] for addr in localAddressesIntfList ]
+                    if str(trg) in addrList:
+                        print('resolving switch mac address')
+                        index = addrList.index(str(trg))
+                        trgPort = localAddressesIntfList[index][1]
+
+                    #if no address has been found, switch checks if the asking address
+                    #is one of another local host since there are now several local 
+                    #interfaces under which hosts have the same prefix
+                    if trgPort is None:
+                        #checking if mac @ of another local host is asked
+                        if str(trg) in self.coveredHosts[dpid].keys():
+                            print('resolving other local host address')
+                            #returning incomming port, so that the asking node
+                            #will use the mac @ of the switch's interface it's linked to
+                            trgPort = in_port
+
                     #if the request concerns the router, prepare answer:
-                    if localPort is not None :
+                    if trgPort is not None :
                         #get hw@
                         hw_addr = opt.hw_src
                         #reply with a neighbor adv
-                        neigh_adv = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT, data=icmpv6.nd_neighbor(res=7, dst=str(trg), option=icmpv6.nd_option_tla(hw_src=self.generateMAC(dpid,localPort))))
+                        neigh_adv = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT, data=icmpv6.nd_neighbor(res=7, dst=str(trg), option=icmpv6.nd_option_tla(hw_src=self.generateMAC(dpid,trgPort))))
                         e= ethernet.ethernet(dst=str(hw_addr),src=self.generateMAC(dpid,in_port), ethertype=ether.ETH_TYPE_IPV6)
                         #here reply with global scope @
                         srcIP = self.bindingList[dpid,in_port]
@@ -598,7 +752,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                         out_ra = parser.OFPPacketOut(datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions, data=pkt_generated.data)
                         datapath.send_msg(out_ra)
                         print('..........neighbor advertisement sent..........')
-                       
+                    else:
+                        print(trg, ' address neither belongs to switch or local host')
             else:
                 print('neighbor solicitation conflict resolution')
                 #nothing is done here all the registration porcess is now done a the reception
@@ -692,15 +847,18 @@ class SimpleSwitch13(app_manager.RyuApp):
 
                 #2nd case destination covering switch is not the current one
                 else:#PING GOING OUTSIDE LOCAL NETWORK
-                    outputIntf = self.routing(dpid,destDpid)
+                    #finding nexthop 
+                    nextHopID = self.next_hop(dpid,destDpid)
+                    #finding output interface
+                    outputIntf = self.routing(dpid,nextHopID)
                     new_mac_src = self.generateMAC(dpid,outputIntf)
-                    new_mac_dst = self.generateMAC(destDpid,self.routing(destDpid,dpid))
+                    new_mac_dst = self.generateMAC(nextHopID,self.routing(nextHopID,dpid))
                     print ('ping toward neighbor ', outputIntf)
                         
                 action = [parser.OFPActionDecNwTtl(), parser.OFPActionSetField(eth_src=new_mac_src),
                           parser.OFPActionSetField(eth_dst=new_mac_dst),parser.OFPActionOutput(outputIntf) ]
             
-                match = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(ping_dst,'ffff:ffff:ffff:ffff::'))
+                match = parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(ping_dst,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                 print('ready to push flow to ',datapath)
                 #routing related flow then pushed to table 1
                 self.add_flow(datapath, 1, match, action,tblId=1)
