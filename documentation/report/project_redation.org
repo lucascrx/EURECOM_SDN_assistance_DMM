@@ -9,7 +9,7 @@ Project Report,
 *** TODO action & instructions , priority 
 *** TODO pushing flows vs ponctual orders 
 *** TODO flow gathered in table, table relachionship (general)
-
+    
 
 * Part III Project Implementation
 * ----------------------------------------------------------------------
@@ -28,8 +28,7 @@ the icmpv6 control messages received by the switches and then making
 it order switches to forward packets across the network. Those steps
 are respectively described below.
 
-** 3.1.1 Discovering the topology
-
+** 3.1.1 Discovering network topology
 *** DONE Retrieving network backbone's topology
 
 Ryu controller to access the underlying network topology including
@@ -70,7 +69,7 @@ attributes that turns out to be useful for the controller in the
 following parts that is why they are stored this way and not in only
 keeping their identifier or reference.
 
-*** TODO 1 rewrite physical backbone addressing with a virtual addressing: MAC and IP @ filling up bindingList
+*** DONE Setting up a virtual adressing plan
 
 Mininet may assign MAC and IP address to every node of the constructed
 network but since we wan't all the configuration decisions to be made
@@ -110,9 +109,6 @@ construct them:
         addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
         return addMAC
 
-
-*** TODO provide details on the addresing plan itself
-
 The way address are forged depend on the interfaces to which they are
 assigned, indeed interfaces domain can be divided in two partitions,
 the backbone interfaces and the local network interfaces. The first
@@ -128,13 +124,16 @@ example if we considere the third interface of a switch number 2
 through which the switch linked to switch number 5, interface's address 
 is 2000:25::3.
 
-Then this addressing convetion introduces a limit of the number of
+Then this addressing convention introduces a limit of the number of
 switch that can handle the controller, as the identifier of two
 switches must fit in two bytes for backbone addresses creation, and
 since indentifiers are kept in decimal system (not hexadecimal) an
 identifier can't exceed the value of 99, therefore it is not possible
 to have more than 99 switches on the network.
 
+Since local network interfaces are not discovered yet by the controler
+as they are not registered on ryu.topology module's data structure,
+the controler can't assign them addresses right now.
 
 Just after address assignement another data struture is built, it's
 called networkGraph, it's a dictionnary binding each switch to its
@@ -147,19 +146,8 @@ convetions described above:
 
 **** TODO insert picture of network addressed map
 
-###########COPY PAST FOR LATER
-For local network interfaces the 2 bytes prefix of the address depends
-on the switch, indeed switches define sub-domain among the network,
-but the first half-byte of the prefix is always set to 2. Then the
-last two bytes of the address is like before, defined by the interface
-number among the switch. For example is the fourth interface of switch
-number 7 through which the switch is linked to an host, interface's
-address is 2007::4.
-
-
-
-** 3.1.3 Handling ICMPv6 configuration messages
-
+** 3.1.2 Handling ICMPv6 configuration messages
+*** DONE Introduction (may be temporary)
 This initialization work described in the previous part is done when
 the controller is sollicitated for the first time by a switch whih has
 received an IPv6 packet. Once completed the received packet has to be
@@ -171,68 +159,139 @@ instructions.
 Our controller only works with ICMPv6 messages, other kinds of
 messages are filtered out.
 
-
-*** a. Router Solicitation message
-**** TODO 1 register host and allow intf discovering too after checking : completing bindingList
+*** DONE Router Solicitation message
 
 The first type of message of a switch can receive is ICMPv6 Router
 Solicitation messages, those one are sent by hosts when they get there
-interface turned on or when they access to a new network. What the
-controller does first in this case is checking if the ingress
+interface turned on or when they access to a new network. 
+
+What the controler does first in this case is checking if the ingress
 interface is not already registered as a backbone interface, if it is
 the controller does nothing. Otherwise handling keep going and as now
 controller is sure that the source is a host, it register its MAC
 address (obtained from the source address field of the frame
 containing the Router Solicitation Message) in a data strucure called
-coveredHosts. This structure stores hosts that have registered inside
-the subnetwork of each switch, in other words it stores for each
-switch the hosts that are suposed to be linked to it. This structure
-is a dictionnary of dictionnaries : the first level key is the switch
+coveredHosts. It stores hosts that have registered inside the
+subnetwork of each switch, in other words it stores for each switch
+the hosts that are suposed to be linked to it. This structure is a
+dictionnary of dictionnaries : the first level key is the switch
 identifier and is bound to a dictionnary where keys are IPv6 addresses
 that the hosts has forged while joining the sub-network and values are
 the couple host's MAC address and the number of the switch's interface
 that is linked to the host (to make things clear hear is an example:
-{dpid1 : {host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)} , dpid2 : {host3IP:(host3MAC,intfLocal1)} }
+{dpid1 : {host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)}
+, dpid2 : {host3IP:(host3MAC,intfLocal1)} }. 
 
+An important point is since the host doesn't have any IPv6 address
+yet, the one it will generate from IPv6-autoconfiguration process is
+guessed from its MAC address and from the switch sub-domain in which
+the it is. It is important to have in mind that if the host uses a
+different way to forge its Global IPv6 address, the controller won't
+recognize it.
 
+The bindingList is also extended, indeed if the Router Solicitation
+message is received on an interface nerver used before, as the
+controler just discovers it, it stores the interface in the
+coveredList: now its knowledge of the network topology gets extended
+to local network interfaces and hosts to which they are linked. Then
+as before an IPv6 address is assigned to this new discovered interface
+and the controler has also a convention for local network
+interfaces. The 2 bytes prefix of the address depends on the switch,
+indeed switches define sub-domain among the network, but the first
+half-byte of the prefix is always set to 2. Then the last two bytes of
+the address is like before, defined by the interface number among the
+switch. For example is the fourth interface of switch number 7 through
+which the switch is linked to an host, interface's address is 2007::4.
+If the Router Advertisement reaches an already registerd interface,
+nothing described happens on the bindingList.
 
+This is just after this step that the mobility management is done,
+the controler finds out if the host that has sent the Router
+Solicitation message cames from another sub-network and trigger or
+not mobility management procedure. For the moment we will skip this
+part, considering first a controler that make the network behaves
+normally, without any extra mecanism.
 
-**** TODO 2 covered host dictionnary built up , ipv6 address guessing au 
-The first type of ICMPv6 a router is willing to receive is Router
-Solicitation message, when one host gets bound to its local interface,
-this message is forwarded to the controller since the switch doesn't
-know how to handle it and since no flow matching this kind of message
-is never ever pushed down to it. Then the controller first retrieves
-the identity of the solicitating host thanks to its mac address, from
-this, the controller checks if the host is comming from a previous
-network and if its mobility has to be ensured and trigger or not the
-mobility management procedure, this point will be explained in a later
-in the report. Finally the controller forges a Router Advertisement
-message that it transmits to the solicited switch in order to be
-relayed on the local network interface. 
+Last, the controller forges the ICMPv6 Router Advertisement to be sent
+by the solicited switch to the host that just contacted it, it first
+create the core of the message this way: 
 
-*** b. Neighbor Solicitation message
-**** TODO 1 two type of NS only smth done when option field not null:node tries to resolve switch mac @
-**** TODO 2 if NS for getting mac @ of another host in the same sub domains routers gives it own mac @
-**** TODO 3 all the registration done at RS reception, not handling address
-conflicts cases 
+**** TODO insert Listing
+icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT,
+data=icmpv6.nd_router_advert(ch_l=64, rou_l=4,
+options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400,
+pre_l=14400, prefix=prefix)]))
 
-Then switches also forward to the controller the neighbor solicitation
-messages that can be split up into subcategories.  An host can send a
-neighbor solicitation in order to resolve the MAC address associated
-to a given IP address, in this case the option field of the router
-solicitation message is not empty, and the controller checks if the
-target IP address is one virtually allocated addressses of the
-solicited switch, if yes the controler forges the corresponding
-neighbor advertisement message and transmits it to the switch for
-being relayed. If the option field of the router solicitation message
-is null that means that this messages has been sent by the host for
-address conflict resolution purposes, in this case, as address
-conflicts are not considered, the controller just registers the host
-to the solicitated switch's covered hosts list.
+with the variable prefix set to the switch's local network interface
+IPv6 address to which the host is bound. This packet is then
+encapsulated in a IPv6 packet (with source address set to the local
+scope address of the interface, generated on the fly like MAC
+addresses) and in a ethernet frame and is forwarded to the switch. 
 
-**** TODO 4 other icmpv6 control msg not handled (RA,NA) as controller redesignes network topology 
-** 3.1.4 ICMPv6 Echo request & reply
+As we want every Router Solicitation messages to be reported by the
+switches to the controler in order to keep track of hosts moves across
+the network, no flow handling Router Solicitations messages are pushed
+down to the switch but only a ponctual order asking to forward the
+provided Router Advertisement message on the specified interface.
+
+Here is the associated code of a ponctual order embedding a Router
+Advertisement message (under pck_generated name) sent by the controler
+to the switch (called datapath here):
+**** TODO insert listing
+actions = [parser.OFPActionOutput(out_port)] 
+out_ra = parser.OFPPacketOut(datapath=datapath,
+buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions,
+data=pkt_generated.data) 
+datapath.send_msg(out_ra)
+
+The switch will execute the given order in forwarding to the host the
+Router Advertisement message and will keep reporting any Router
+Solicitation messages comming next to the controler.
+
+*** DONE Neighbor Solicitation message
+
+A second kind of ICMPv6 message that can be reported by switches to
+the controller are ICMPv6 Neighbor Solicitation messages, there are
+two reason for an host to send such a message to its local switch. The
+first one is in order to resolve the MAC address associated to a given
+IPv6 address : the target address. In this case the option field of
+the Router Solicitation message is not empty, and the controller
+checks if the target address is one of the virtually assigned
+addresses the solicited switch's interfaces. If yes the controler
+forges the corresponding Neighbor Advertisement message that contains
+the IPv6 address of the spotted interface and transmits it back to the
+switch along a forwarding order for being relayed to the host, exactly
+as for Router Advertisement messages.
+
+As several hosts can be connected to the same switch and then get
+configured with the same prefix whereas they are linked through
+different interfaces, the controler also resolves inside domain
+requests : when a Neighbor Solicitation messages received by a switch
+has a target address corresponding to one of another host on the local
+network. Here, as every packet between hosts in the sub-network goes
+through the switch, the packet containing frame built by the sender
+will have its destination MAC address set to the MAC address of the
+switch's interface it is linked to.
+
+If the option field of the Neighbor Solicitation message is null that
+means that it has been sent by the host for address conflict
+resolution purposes, in this case, as address conflicts are not
+considered, the controller doesn't do anything : all the host
+registration process inside controller data structure is done at
+Router Solicitation message reception.
+
+As address conflicts are not handled by the controller, if an host
+comes up with a new reconfigured IPv6 address it won't be recognized
+by the switch since this address is not obtained from the usual IPv6
+autoconfiguration process.
+
+Router Solicitation and Neighbor Solicitation messages are the only
+two kinds of ICMPv6 control messages handled by the controller, as the
+controler redefines itself the whole backbone addressing plan and as
+address conflict is not managed there is no need to care about ICMPv6
+Router Advertisement and Neighbor Advertisement Messages.
+
+** 3.1.3 ICMPv6 Echo request & reply
 *** TODO 1 ping toward one of the router intf : scanning bindingList of the switch : no flow pushed, just ponctual order
 *** TODO 2 ping toward local host : seeking in coveredHost
 *** TODO 3 ping toward another entity : other switch backbone intf / local nw intf ,remote host finding next hop and output intf : flow pushed 
@@ -274,7 +333,7 @@ a backbone interface (every interface but not the local one) of a
 switch that is not the one hosting the ping sender can't be routed and
 then forwarded.
 
-** 3.1.5 Flow organisation 
+** 3.1.4 Flow organisation 
 *** TODO 1 routing related flows in table 1 anticipation of table 0
 *** TODO 2 switches become autonomous
 
