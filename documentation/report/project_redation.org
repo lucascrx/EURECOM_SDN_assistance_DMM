@@ -29,50 +29,85 @@ it order switches to forward packets across the network. Those steps
 are respectively described below.
 
 ** 3.1.1 Discovering the topology
-*** TODO now recognizing backbones interfaces using mininet data struture
 
+*** DONE Retrieving network backbone's topology
 
-First, to enable the Ryu controller to access to the nodes and the
-links between them, it has to be launched with the "--observe-link"
-option. I guess that in order to build data structures where those
+Ryu controller to access the underlying network topology including
+nodes and the links between them, then it has to be launched with the
+"--observe-link" option. In order to build data structures where
 topology information are stored, the controller uses the LLDP messages
-exchanged by the switches when the network is just created. That is
-why this option allows the controller to registers all the switches of
-the network and all the links between then but it can't retrieve any
-information about the hosts.
+exchanged between switches when the network is just created. That is
+why this option allows the controller to be aware of all the switches
+of the network and all the links between then but it can't retrieve
+any information about the hosts.
 
 An important point is as we didn't find any way to find out when the
-discovery procedure was done, ie detecting the instant when the
-topology data structures are fully completed, our controller waits for
-the reception of the first ping message by one of the switches of the
-network to start reading into those data structures. Indeed we assume
-that ping messages are exchanged long time after the whole network
-discovery has been done.
+discovery procedure was done, (ie detecting the instant when the
+topology data structures are fully completed by Ryu), our controller
+waits for the reception of the first IPv6 message by one of the
+switches of the network to start reading into those data structures
+and building objects. Indeed we assume that IPv6 messages are
+exchanged long time after the whole network discovery has been
+done.
 
-The function called collectRoutingInfo has been created in the purpose
-to first access to the topology details (swithes and links) obtained
-during the discovery phase, using the topology module of Ryu.
+Our Ryu controller embed a function called collectRoutingInfo() that
+has been created in the purpose of grabbing topology details and
+information given by mininet obtained during the discovery phase.  It
+is then called once, when the first IPv6 message is submitted by a
+switch to the controller and uses the topology module of Ryu. Mininet
+information are collected this way:
 
-         #All the topology informations are obtained from the app_manager
+**** TODO code listing
+         #All the topology information are obtained from the app_manager
         appManager = app_manager.RyuApp()
-        #Collecting switches and links informations
+        #Collecting switches and links information
         self.switchList = ryu.topology.api.get_all_switch(appManager)
         self.linkList = ryu.topology.api.get_all_link(appManager)
- 
-*** TODO 1 rewrite physical backbone addressing with a virtual addressing: MAC and IP @ filling up bindingList
-*** TODO provide details on the addresing plan itself
-*** implementing addressing plan
-Once every connection between every switch is registered, using an
-array of arrays called bindingList, the collectRoutingInfo() function
-assignes an IPv6 address to every interfaces of every switches. This
-address depends on the identifiers of the switch itself and the
-current port but also on the identifier of the switch on the other
-side of the link.
 
+Two lists : self.switchList and self.linkList are filled up, with
+respectively switch and link objects. Those objects embed many
+attributes that turns out to be useful for the controller in the
+following parts that is why they are stored this way and not in only
+keeping their identifier or reference.
+
+*** TODO 1 rewrite physical backbone addressing with a virtual addressing: MAC and IP @ filling up bindingList
+
+Mininet may assign MAC and IP address to every node of the constructed
+network but since we wan't all the configuration decisions to be made
+by the controller, it will re-define virtually all the IP and MAC
+addresses of the network. "Virtually" meaning that new given addresses
+are not written back on switchs interfaces to update the old ones but
+when the controller asks a node to send a packet it will also specify
+source and destination addresses the switch has to set on the packet
+and thoses addresses will be the ones it has defined itself.
+
+Then, once every connection between every switch is registered, the
+collectRoutingInfo() function defines new IPv6 addresses and uses a
+dictionnay called bindingList to store what is the new assigned IPv6
+address to each interface of each switch. New addresses depend on the
+identifiers of the switch itself, on the interface number and also on
+the identifier of the switch on the other side of the link.
+
+Here is the code filling up the bindingList structure from the linkList
+and the switchList previously built.
+
+**** TODO insert Listing
         for link in self.linkList:
             if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
                 self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
                 self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
+
+Mac Addresses are also redifined the same way but as they all are
+generated the same way, they are not stored anywhere but computed on
+the fly every time they are needed. Here is the function that
+construct them:
+
+**** TODO insert listing
+    #return the MAC address associated to DATAPATH_id and port_id
+    def generateMAC(self, dpid, portid):
+        addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
+        return addMAC
+
 
 Moreover each switches is supposed to have a local interface where its
 local network is bound to, our controller imposes that it has to be
@@ -89,6 +124,12 @@ but the flows and the orders it will push the routers will be forged
 according to this new addressing plan. Then all the addresses provided
 by mininet or the netork simulator become useless and moreover, as you
 can see later, switches MAC address are also virtually re-written the
+
+
+
+*** TODO provide details on the addresing plan itself
+*** implementing addressing plan
+
 
 ** 3.1.3 Handling ICMPv6 configuration messages
 *** a. Router Solicitation message
@@ -109,7 +150,8 @@ relayed on the local network interface.
 
 *** b. Neighbor Solicitation message
 **** TODO 1 two type of NS only smth done when option field not null:node tries to resolve switch mac @
-**** TODO 2 all the registration done at RS reception, not handling address
+**** TODO 2 if NS for getting mac @ of another host in the same sub domains routers gives it own mac @
+**** TODO 3 all the registration done at RS reception, not handling address
 conflicts cases 
 
 Then switches also forward to the controller the neighbor solicitation
@@ -126,10 +168,11 @@ address conflict resolution purposes, in this case, as address
 conflicts are not considered, the controller just registers the host
 to the solicitated switch's covered hosts list.
 
-**** TODO 3 other icmpv6 control msg not handled (RA,NA) as controller redesignes network topology 
+**** TODO 4 other icmpv6 control msg not handled (RA,NA) as controller redesignes network topology 
 ** 3.1.4 ICMPv6 Echo request & reply
 *** TODO 1 ping toward one of the router intf : scanning bindingList of the switch : no flow pushed, just ponctual order
-*** TODO 2 ping toward another entity : other switch backbone intf / local nw intf , local host, remote host finding output intf : flow pushed 
+*** TODO 2 ping toward local host : seeking in coveredHost
+*** TODO 3 ping toward another entity : other switch backbone intf / local nw intf ,remote host finding next hop and output intf : flow pushed 
 For the previous messages that involve a response from the switch,
 as this response is build from elements contained in the request, it
 is not possible or quite cumbersome to set up flows on the switches in
@@ -244,6 +287,7 @@ network of this list is the same as the one where the router
 solicitation comes from, that means that the host hasn't moved then no
 mobility management procedure is triggered.
 
+*** TODO 2 populating 3rd table to make the new switch know the local intf of the old @, not interferring with normal routing (as default policy of t1 is delete)
 ** 3.2.2 Setting up tunnels
 *** TODO 1 tunnel aim and properties : vlan (why?), unidirectionnel
 *** TODO 2 implementation using flows : old input, new output : ok (@ip retrieving) / old output : table 0 / new input : table 3 ; tables relashionnship 
@@ -260,6 +304,7 @@ switch controling the newtork where this old address has been built
 (no route optimization) before been forwarded toward the final
 destination.
 
+*** TODO 3 switches crossed by the tunnel relaying node.
 *** a. Properties:
 
 It has been choosen to implement those tunnels with Vlan tags, as it
