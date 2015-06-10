@@ -59,7 +59,7 @@ class SimpleSwitch13(app_manager.RyuApp):
        	super(SimpleSwitch13, self).__init__(*args, **kwargs)
         #Dictionnary of dictionnary that associates each switch to the list of hosts under its coverage.
         #and for each host the associated switch's interface to which it's linked and the Mac @ in a tuple
-        #{dpid1 :  { host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)}
+        #{dpid1 :  { host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)}}
         self.coveredHosts = {}
         #not used! Resolving MAC @ : dictionnary where :
         # (src_dp_id,src_port_no) --> (@MAC local)

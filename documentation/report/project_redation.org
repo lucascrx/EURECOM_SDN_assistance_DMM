@@ -44,10 +44,10 @@ any information about the hosts.
 An important point is as we didn't find any way to find out when the
 discovery procedure was done, (ie detecting the instant when the
 topology data structures are fully completed by Ryu), our controller
-waits for the reception of the first IPv6 message by one of the
-switches of the network to start reading into those data structures
-and building objects. Indeed we assume that IPv6 messages are
-exchanged long time after the whole network discovery has been
+waits for the report of the reception of the first IPv6 message by one
+of the switches of the network to start reading into those data
+structures and building objects. Indeed we assume that IPv6 messages
+are exchanged long time after the whole network discovery has been
 done.
 
 Our Ryu controller embed a function called collectRoutingInfo() that
@@ -84,9 +84,11 @@ and thoses addresses will be the ones it has defined itself.
 Then, once every connection between every switch is registered, the
 collectRoutingInfo() function defines new IPv6 addresses and uses a
 dictionnay called bindingList to store what is the new assigned IPv6
-address to each interface of each switch. New addresses depend on the
-identifiers of the switch itself, on the interface number and also on
-the identifier of the switch on the other side of the link.
+address to each interface of each switch (the key is the tuple formed
+by the switch identifier and the interface identifier among the switch
+and the value is the assigned IPv6 address). New addresses depend on
+the identifiers of the switch itself, on the interface number and also
+on the identifier of the switch on the other side of the link.
 
 Here is the code filling up the bindingList structure from the linkList
 and the switchList previously built.
@@ -109,31 +111,92 @@ construct them:
         return addMAC
 
 
-Moreover each switches is supposed to have a local interface where its
-local network is bound to, our controller imposes that it has to be
-the interface number 1, then like before an IPv6 address is also
-assigned to local interfaces:
-
-        for switch in self.switchList:
-            self.bindingList[switch.dp.id,1]='200'+str(switch.dp.id)+'::1'
-            #initilizing coveredHosts dictionnary:
-
-It's important to understand that all this generated IP address are
-never known the switches, indeed the controller never transmit them
-but the flows and the orders it will push the routers will be forged
-according to this new addressing plan. Then all the addresses provided
-by mininet or the netork simulator become useless and moreover, as you
-can see later, switches MAC address are also virtually re-written the
-
-
-
 *** TODO provide details on the addresing plan itself
-*** implementing addressing plan
+
+The way address are forged depend on the interfaces to which they are
+assigned, indeed interfaces domain can be divided in two partitions,
+the backbone interfaces and the local network interfaces. The first
+one corresponds to interfaces in which a link between two switches is
+pluged, and the second one corresponds to interfaces in which a link
+between a switch and a host is pluged. Backbone interfaces all share
+the same two bytes prefix : '2000:' and backbone interfaces connected
+by a link share the same four bytes prefix : '2000:AB' where A and B
+are the switch to which interfaces belong (order or A and B depends on
+the link object from ryu.topology module). Then the last two bytes of
+the address is defined by the interface number among the switch. For
+example if we considere the third interface of a switch number 2
+through which the switch linked to switch number 5, interface's address 
+is 2000:25::3.
+
+Then this addressing convetion introduces a limit of the number of
+switch that can handle the controller, as the identifier of two
+switches must fit in two bytes for backbone addresses creation, and
+since indentifiers are kept in decimal system (not hexadecimal) an
+identifier can't exceed the value of 99, therefore it is not possible
+to have more than 99 switches on the network.
+
+
+Just after address assignement another data struture is built, it's
+called networkGraph, it's a dictionnary binding each switch to its
+switch neighbor list. For this structure routing algorithm are
+launched to resolve the one hop path to reach one switch from another
+one.
+
+Here is a example of addressing plan following the addressing
+convetions described above:
+
+**** TODO insert picture of network addressed map
+
+###########COPY PAST FOR LATER
+For local network interfaces the 2 bytes prefix of the address depends
+on the switch, indeed switches define sub-domain among the network,
+but the first half-byte of the prefix is always set to 2. Then the
+last two bytes of the address is like before, defined by the interface
+number among the switch. For example is the fourth interface of switch
+number 7 through which the switch is linked to an host, interface's
+address is 2007::4.
+
 
 
 ** 3.1.3 Handling ICMPv6 configuration messages
+
+This initialization work described in the previous part is done when
+the controller is sollicitated for the first time by a switch whih has
+received an IPv6 packet. Once completed the received packet has to be
+handled as well as the next incomming ones. Then when the controller
+is reported of the reception of a IPv6 packet by a switch, it first
+figures out the type of the packet and after run the apropriate
+instructions.
+
+Our controller only works with ICMPv6 messages, other kinds of
+messages are filtered out.
+
+
 *** a. Router Solicitation message
 **** TODO 1 register host and allow intf discovering too after checking : completing bindingList
+
+The first type of message of a switch can receive is ICMPv6 Router
+Solicitation messages, those one are sent by hosts when they get there
+interface turned on or when they access to a new network. What the
+controller does first in this case is checking if the ingress
+interface is not already registered as a backbone interface, if it is
+the controller does nothing. Otherwise handling keep going and as now
+controller is sure that the source is a host, it register its MAC
+address (obtained from the source address field of the frame
+containing the Router Solicitation Message) in a data strucure called
+coveredHosts. This structure stores hosts that have registered inside
+the subnetwork of each switch, in other words it stores for each
+switch the hosts that are suposed to be linked to it. This structure
+is a dictionnary of dictionnaries : the first level key is the switch
+identifier and is bound to a dictionnary where keys are IPv6 addresses
+that the hosts has forged while joining the sub-network and values are
+the couple host's MAC address and the number of the switch's interface
+that is linked to the host (to make things clear hear is an example:
+{dpid1 : {host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)} , dpid2 : {host3IP:(host3MAC,intfLocal1)} }
+
+
+
+
 **** TODO 2 covered host dictionnary built up , ipv6 address guessing au 
 The first type of ICMPv6 a router is willing to receive is Router
 Solicitation message, when one host gets bound to its local interface,
