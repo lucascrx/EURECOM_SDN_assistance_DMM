@@ -654,14 +654,21 @@ class SimpleSwitch13(app_manager.RyuApp):
                         #if the network is back in a previously visited network
                         #redirect the tunneled flow on the local interface
                         print('Mobile node ',src,' is back to network ', dpid)
-                        matchBack = datapath.ofproto_parser.OFPMatch( eth_type=0x86dd, ip_proto=58, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
+                        matchBack = datapath.ofproto_parser.OFPMatch( eth_type=0x86dd, ip_proto=58,vlan_vid=0x000, ipv6_dst=(priorAddress,'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'))
                         output_port = in_port
                         new_mac_src = self.generateMAC(priorDp.id,output_port)
                         new_mac_dst = src
                         actionsBack = [datapath.ofproto_parser.OFPActionDecNwTtl(), datapath.ofproto_parser.OFPActionSetField(eth_src=new_mac_src),
-                            datapath.ofproto_parser.OFPActionSetField(eth_dst=new_mac_dst),
-                                           datapath.ofproto_parser.OFPActionOutput(output_port) ]
-                        self.add_flow(datapath,65535,matchBack, actionsBack)
+                            datapath.ofproto_parser.OFPActionSetField(eth_dst=new_mac_dst)]
+                        instsBack = [datapath.ofproto_parser.OFPInstructionActions(datapath.ofproto.OFPIT_APPLY_ACTIONS,actionsBack)]
+                        #Forward to normal routing table (table 1)
+                        instsBack.append(datapath.ofproto_parser.OFPInstructionGotoTable(1))
+                        modBack = datapath.ofproto_parser.OFPFlowMod(datapath=datapath, priority=65535, match=matchBack,instructions=instsBack)
+                        datapath.send_msg(modBack)
+        
+
+
+
                         print('Tunnel flow pushed to switch ' ,datapath.id ,' to make packets going to ', priorAddress, ' going to local network again')
 
 
