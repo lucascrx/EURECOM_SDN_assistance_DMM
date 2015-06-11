@@ -292,9 +292,77 @@ address conflict is not managed there is no need to care about ICMPv6
 Router Advertisement and Neighbor Advertisement Messages.
 
 ** 3.1.3 ICMPv6 Echo request & reply
-*** TODO 1 ping toward one of the router intf : scanning bindingList of the switch : no flow pushed, just ponctual order
+The last kind of message we want to be handled by the controller are
+ICMPv6 Echo messages, they are representing data packets in the
+simulations. 
+
+When the reception of on ICMPv6 Echo packet is reported
+by a switch to the controller, the controller first looks at packet's
+destination address and behaves according to it.
+
+*** DONE Answering to Echo messages 
+Once the controller gets packet's destination address it checks if
+this address belongs to one interface of the solicited switch using
+the bindingList, from which it retrieves switch's interfaces this way:
+**** TODO insert listing
+localAddressesList = [ self.bindingList[localPort] for localPort in self.bindingList.keys() if localPort[0]==dpid ]
+
+If the destination address is indeed one belonging to the switch,
+there is two possible scenarios : if the message is an Echo Reply,
+nothing has to be sent back the the network and the controller
+doesn't do anything. If the message is an Echo Request, that means
+that someone is pinging the switch and it has to reply.
+
+Exactely as when the controller was ordering the switch to send a
+Router Advertisement or a Neighbor Advertisement message, it first
+constructs the ICMPv6 Echo Reply message and the encapsulating
+packets, and pushes it to the switch along with a punctual forwarding
+order toward the interface the Echo Request was coming from. 
+
+Here we choosed not to push flow to the switch even if it can bother
+the controller because as ICMPv6 Echo Reply message is constructed from
+the associated Echo Request message it would have been necessary to
+push flows specific to each Echo Request's destination address that
+have their specific actions. Therefore flow table could have been
+over populated with Echo message related flows which are not the
+interesting ones.
+
 *** TODO 2 ping toward local host : seeking in coveredHost
 *** TODO 3 ping toward another entity : other switch backbone intf / local nw intf ,remote host finding next hop and output intf : flow pushed 
+
+When the destination address of the Echo packet is not of of the
+sollicited switch's address, that means the switch is one intermediate
+node on the Echo message path and have to forward it toward its
+destination, regardless if its an Echo request or an Echo reply.
+
+Then the controller figures out what is the local network to which the
+destination address belongs to. To do so it extracts from the address
+the number contained on its first two bytes, from it it get the
+identifier of the switch the destination should be linked to unless if
+it is a backbone interface that is aimed and the result is null, in
+this case it extracts the last byte of the address where is written
+switch's identifier.
+
+Then two cases are possible, either the destination node is an host
+direcly linked to the solicited switch (in this case the extracted
+identifier is the one of the switch itself) and here the controller
+checks if there is an host registered in the coveredHosts list of the
+switch that own Echo message's destination address. If no host is
+found is the list the packet is dropped, but if one is found the
+controller feches host's details from the coveredHosts list that are :
+host's MAC address and the switch's interface to which it's linked
+to. With all of this the controller has everything he needs to relay
+the echo message toward its destination.
+
+The other case is that the extracted network identifier is not the one
+of the switch itself meaning that another switch or an host located in
+a remote local network is aimed. Here the controller finds out 
+next hop switch toward the destination : for this purpose is uses the
+structure called networkGraph constructed during the initialisation
+phase. On runs on it 
+
+
+
 For the previous messages that involve a response from the switch,
 as this response is build from elements contained in the request, it
 is not possible or quite cumbersome to set up flows on the switches in
