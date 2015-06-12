@@ -473,23 +473,165 @@ This can be shown through this figure :
 \end{figure}
 
 
-
 \part{Project tools}
 
-\section{OpenFlow1.3}
-*** TODO matching criterias
-*** TODO action & instructions , priority 
-*** TODO pushing flows vs ponctual orders 
-*** TODO flow gathered in table, table relachionship (general)
-\section{Minet}
-*** TODO quick presentation (from python code) 
-*** TODO advanteges for SDN simulations
-*** TODO user interactions
+\section{OpenFlow}
+
+\subsection{Presentation}
+OpenFlow is a communication protocol between the controller and the
+the switches in a SDN oriented network. Switches use it to report the
+events they meet (e.g packet reception) to the controller, where all
+the network intelligency is centralized. Then using this protocol the
+controller send to switches actions that have to be taken.
+
+\subsection{The concept of flows}
+OpenFlow formalizes the idea of orders pushed to switches by the
+controller in introducing the concept of flows, indeed a flow is
+composed by a set of fields set to certain values, those fields
+correspond to the ones that compose the structure of the packets
+exchanged over the network. A elementary networking action is join
+along the field set, it can be for example 'forward to this
+interface'.\\
+\newline
+The controller as the brain of the network must have to tell to
+switches what to do and when, then that is now that the structure of
+flow is relevant : to transmit its order the controller sends flows
+with a set of fields set to match a specific kind of packet, exactly
+like a fire wall rule (for example type=ICMP, addr\_dest=198.168.1.12)
+and with a action set to the action the controller wants the
+recipients of the flow to do whenever they receive this kind of
+packet.\\
+\newline
+With this approach switches get progressively autonomous the more they
+are instructed by flows from the controller and they refer less and
+less to it. Flows have a Lifetime and the controller can modify or
+even delete them after their submission.  There are two ways of
+pushing flows to switches, the first one is proactive and consists in
+providing all the knowledge (i.e a complete set of flows) that
+switches would need when the network initializes.  The second method
+is reactive : when a packet reaches a switch and doesn't match any
+received flow, the switch asks the controller what to do with it, in
+response the controller send a flow that matches the packet.
+
+\subsection{Flow organization}
+Inside switches, flows are organized into tables and are affected with
+a priority level that defines the way they are ranked in the
+table. For every packet received the switch scans linearly the flow
+table, executes the action of the first matching flow and stops there.\\
+\newline
+As previously said if the switch reaches the end of the flow table
+without having found any matching flow it reports it to the
+controller, but moreover a default entry policy can be defined for the
+table, this is a way to define a default behaviour for switches.\\
+\newline
+It is important to have in mind that when a switch is waiting for a
+flow from the controller to know what to do with a packet just
+received, if no default behaviour is set pending packets are lost
+until the flow is installed on the switch, buffering mechanisms can
+be set up to avoid those losses.\\
+\newline
+As flow may have different purposes and as the user may want to scan a
+first set of flows before a second one, multiples tables can be
+used. They are ranked according to their identifier and can be bound
+one after the other one so that different purposes flows are not mixed
+up. It is not possible for the flow scanning process to loop over the
+same table of to jump to a table with a lower identifier, it's a one
+way scan.
+
+\subsection{Punctual order}
+
+The advantage of pushing flows is that the controller is only
+solicited once by the switch to tell it what to do with a specific
+kind of packet. But there are some cases for which the user wants the
+the switch to keep the controller informed of the reception of the
+same kind packets. To do so the Controller doesn't reply to the switch
+in providing him a flow but an individual elementary order, like a
+flow without the field set. So that switch performs the order and its
+table doesn't change and then it will keep asking to the controller
+what to do with those packets.\\
+\newline
+When the switch requests the controller for an action to perform it
+joins in the openFlow message the message that has made it send the
+request. Then if the controller replies with a punctual order it also
+joins the packet in the response so that the provided action can be
+performed on the packet itself, and this way packet is not lost but
+just delayed.
+
+\section{Mininet}
+
+\subsection{Presentation}
+Mininet is a network emulator, it allows to create realistic virtual
+network running switch and application code on a virtual
+machine.\\
+\newline
+Mininet makes easy to vitualize hosts, switches, links, and
+controllers . It makes a single system looks like a complete network
+because the most part of their behavior is similar to discrete
+hardware elements.  The figure below shows the hierarchy of the
+network building :
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure9.png}
+  \caption{Mininet basic elements}
+\end{figure}
+
+\subsection{Advantages and limitations}
+
+Mininet is simplified tool that get configured from a python script,
+then it is possible to design any kind of network and user can
+dynamically interact with mininet network through a Command Line
+Interface and then can modify it at run-time.
+
+Mininet suits particularly well SDN oriented networks as it provides
+the envelop for the controller user, then the controller code is just
+bound to it whatever its framework is. Messages between controller and
+mininet go through the local loop and hopefully, Mininet is compatible
+with OpenFlow1.3.
+
+The only problem met with mininet is how complex it is to make the
+topology change at run-time through the command line interface.
+
 \section{Ryu}
-*** TODO quick presentation
-*** TODO comparison with other controller framework
-*** TODO interaction with mininet
-*** TODO available resources
+
+\subsection{Presentation}
+Ryu is the SDN framework used for the implementation of our solution,
+it's python based, very flexible and embeds quite a lot of options
+published by a a developer community. Writing a SDN controller above
+Ryu is relatively easy as the framework all the configurations and the
+interaction with OpenFlow then user just has to tell what has to be
+done when a certain type of packet is received by a certain switch.
+Here is how it is located on a application stack:
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.3]{reportPictures/ryu_layers.png}
+  \caption{Ryu Architecture}
+\end{figure}
+
+\subsection{Comparison with other frameworks}
+SDN controller frameworks are only a few and they are all very young,
+all written in different languages. The first one is Open Day List
+comes from a consensus of several IT company as it's running on a
+Java Virtual Machine, it allow user to use Java Libraries. The problem
+this controller is not handling IPv6 and is still stuck to IPv4 then it
+can't be use for our project. Another python based framework is POX
+but it also suffers from the same problem. Trema is a framework that
+handle IPv6 addresses but it is still very young and poorly documented.\\
+\newline
+This aim of this little part is mainly to say that SDN frameworks are
+evolving fast, we have chosen Ryu because at this time it seems to be
+the one that suits the most or project, but in few months it would be
+maybe better to migrate the controller implementation under Open
+DayLight framework to benefit its strong support.
+
+\subsection{Ryu available resources}
+
+A relatively big developer community works on Ryu project, then the
+user can find lot of help and examples at 'http://ryu.readthedocs.org'
+moreover there is a book called 'RYU SDN Framework' available on the
+internet.  Then, for some more complex point the user may refere to
+the Ryu Mailing List.
 
 \part{Project Implementation}
 
@@ -505,14 +647,14 @@ controller able to achieve the previously described DMM solution the
 first step is to enable the controller with router capabilities which
 involves making it aware of the underlaying topology, making it handle
 the icmpv6 control messages received by the switches and then making
-it order switches to forward packets across the network. Those steps
+it request switches to forward packets across the network. Those steps
 are respectively described below.
 
 \subsection{Discovering network topology}
 
 \subsubsection{Retrieving network backbone's topology}
 
-Ryu controller needs to access the underlying network topology
+Ryu controller needs to access the underlaying network topology
 including nodes and the links between them, then it has to be launched
 with the "--observe-link" option. In order to build data structures
 where topology information are stored, the controller uses the LLDP
@@ -521,7 +663,7 @@ created. That is why this option allows the controller to be aware of
 all the switches of the network and all the links between then but it
 can't retrieve any information about the hosts.\\
 \newline
-An important point is as we didn't find any way to find out when the
+An important point is as we didn't find any way to notice when the
 discovery procedure was done, (ie detecting the instant when the
 topology data structures are fully completed by Ryu), our controller
 waits for the report of the reception of the first IPv6 message by one
@@ -530,7 +672,7 @@ structures and building objects. Indeed we assume that IPv6 messages
 are exchanged long time after the whole network discovery has been
 done.\\
 \newline
-Our Ryu controller embed a function called collectRoutingInfo() that
+Our Ryu controller embeds a function called collectRoutingInfo() that
 has been created in the purpose of grabbing topology details and
 information given by mininet obtained during the discovery phase.  It
 is then called once, when the first IPv6 message is submitted by a
@@ -553,19 +695,20 @@ keeping their identifier or reference.
 
 \subsubsection{Setting up a virtual adressing plan}
 
-Mininet may assign MAC and IP address to every node of the constructed
-network but since we wan't all the configuration decisions to be made
-by the controller, it will re-define virtually all the IP and MAC
-addresses of the network. "Virtually" meaning that new given addresses
-are not written back on switchs interfaces to update the old ones but
-when the controller asks a node to send a packet it will also specify
-source and destination addresses the switch has to set on the packet
-and thoses addresses will be the ones it has defined itself.\\
+Mininet may assigns MAC and IP addresses to every node of the
+constructed network but since we want all the configuration decisions
+to be made by the controller, it will re-define virtually all the IP
+and MAC addresses of the network. "Virtually" meaning that new given
+addresses are not written back on switchs interfaces to update the old
+ones but when the controller asks a node to send a packet it will also
+specify source and destination addresses the switch has to set on the
+packet and thoses addresses will be the ones the controller has
+defined itself.\\
 \newline
 Then, once every connection between every switch is registered, the
 collectRoutingInfo() function defines new IPv6 addresses and uses a
-dictionnay called bindingList to store what is the new assigned IPv6
-address to each interface of each switch (the key is the tuple formed
+dictionary called bindingList to store what is the new assigned IPv6
+address to each interface of each switch (the key is the pair formed
 by the switch identifier and the interface identifier among the switch
 and the value is the assigned IPv6 address). New addresses depend on
 the identifiers of the switch itself, on the interface number and also
@@ -581,10 +724,10 @@ for link in self.linkList:
         self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
 \end{lstlisting}
 
-Mac Addresses are also redifined the same way but as they all are
+Mac Addresses are also redefined the same way but as they all are
 generated the same way, they are not stored anywhere but computed on
 the fly every time they are needed. Here is the function that
-construct them:
+constructs them:
 
 \begin{lstlisting}[frame=single,language=Python,breaklines=true] 
 #return the MAC address associated to DATAPATH_id and port_id
@@ -593,52 +736,53 @@ def generateMAC(self, dpid, portid):
     return addMAC
 \end{lstlisting}
 
-The way address are forged depend on the interfaces to which they are
-assigned, indeed interfaces domain can be divided in two partitions,
-the backbone interfaces and the local network interfaces. The first
-one corresponds to interfaces in which a link between two switches is
-pluged, and the second one corresponds to interfaces in which a link
-between a switch and a host is pluged. Backbone interfaces all share
-the same two bytes prefix : '2000:' and backbone interfaces connected
-by a link share the same four bytes prefix : '2000:AB' where A and B
-are the switch to which interfaces belong (order or A and B depends on
-the link object from ryu.topology module). Then the last two bytes of
-the address is defined by the interface number among the switch. For
-example if we considere the third interface of a switch number 2
-through which the switch linked to switch number 5, interface's address 
-is 2000:25::3.\\
+The way addresses are forged depends on the interfaces to which they
+are assigned, indeed interfaces domain can be divided in two
+partitions, the backbone interfaces and the local network
+interfaces. The first one corresponds to interfaces in which a link
+between two switches is plugged, and the second one corresponds to
+interfaces in which a link between a switch and a host is
+plugged. Backbone interfaces all share the same two bytes prefix :
+'2000:' and two backbone interfaces connected by a link share the same
+four bytes prefix : '2000:AB' where A and B are the identifiers of the
+switch to which interfaces belong (order of A and B depends on the
+link object from ryu.topology module). Then the last two bytes of the
+address is defined by the interface number among the switch. For
+example if we consider the third interface of a switch number 2
+through which the switch linked to switch number 5, interface's
+address is 2000:25::3.\\
 \newline
 Then this addressing convention introduces a limit of the number of
 switch that can handle the controller, as the identifier of two
 switches must fit in two bytes for backbone addresses creation, and
-since indentifiers are kept in decimal system (not hexadecimal) an
+since identifiers are kept in decimal system (not hexadecimal) an
 identifier can't exceed the value of 99, therefore it is not possible
 to have more than 99 switches on the network.\\
 \newline
-Since local network interfaces are not discovered yet by the controler
+Local network interfaces are not discovered yet by the controller
 as they are not registered on ryu.topology module's data structure,
-the controler can't assign them addresses right now.\\
+the controller can't assign them addresses right now.\\
 \newline
-Just after address assignement another data struture is built, it's
-called networkGraph, it's a dictionnary binding each switch to its
-switch neighbor list. For this structure routing algorithm are
-launched to resolve the one hop path to reach one switch from another
-one.\\
+Just after address assignment another data structure is built, it's
+called networkGraph, it's a dictionary binding each switch to its
+switch neighbor list. From this structure, routing algorithm is
+launched to resolve the detailed path, hop by hop, to reach one switch
+from another one.\\
 \newline
 Here is a example of addressing plan following the addressing
-convetions described above:
+conventions described above:
 
 ##TODO insert picture of network addressed map
 
 \subsection{Handling ICMPv6 configuration messages}
 
 \paragraph{Introduction}
-This initialization work described in the previous part is done when
-the controller is sollicitated for the first time by a switch whih has
+This initialization job described in the previous part is done when
+the controller is solicited for the first time by a switch which has
 received an IPv6 packet. Once completed the received packet has to be
-handled as well as the next incomming ones. Then when the controller
-is reported of the reception of a IPv6 packet by a switch, it first
-figures out the type of the packet and after run the apropriate
+handled as well as the next incoming ones. Then when the controller
+is reported of the reception of a IPv6 packet by a switch, it firsts
+figures out the type of the packet and after run the appropriate
 instructions.\\
 Our controller only works with ICMPv6 messages, other kinds of
 messages are filtered out.
@@ -646,59 +790,59 @@ messages are filtered out.
 \subsubsection{Router Solicitation message}
 
 The first type of message of a switch can receive is ICMPv6 Router
-Solicitation messages, those one are sent by hosts when they get there
+Solicitation messages, this message is sent by hosts when they get their
 interface turned on or when they access to a new network.\\ 
 \newline
-What the controler does first in this case is checking if the ingress
-interface is not already registered as a backbone interface, if it is
+What the controller does first in this case is checking if the ingress
+interface is not already registered as backbone interface, if it is
 the controller does nothing. Otherwise handling keep going and as now
-controller is sure that the source is a host, it register its MAC
+controller is sure that the source is a host, it registers its MAC
 address (obtained from the source address field of the frame
-containing the Router Solicitation Message) in a data strucure called
+containing the Router Solicitation Message) in a data structure called
 coveredHosts. It stores hosts that have registered inside the
-subnetwork of each switch, in other words it stores for each switch
-the hosts that are suposed to be linked to it. This structure is a
-dictionnary of dictionnaries : the first level key is the switch
-identifier and is bound to a dictionnary where keys are IPv6 addresses
-that the hosts has forged while joining the sub-network and values are
-the couple host's MAC address and the number of the switch's interface
+sub-network of each switch, in other words it stores for each switch
+the hosts that are supposed to be linked to it. This structure is a
+dictionary of dictionaries : the first level key is the switch
+identifier and is bound to a dictionary where keys are IPv6 addresses
+that the hosts has forged when joining the sub-network and values are
+the couple host's MAC address and the identifier of the switch's interface
 that is linked to the host (to make things clear hear is an example:\\
 {dpid1 : {host1IP:(host1MAC,intfLocal1),host2IP:(host2MAC,intfLocal2)}
 , dpid2 : {host3IP:(host3MAC,intfLocal1)} }. \\
 \newline
-An important point is since the host doesn't have any IPv6 address
+An important point is, since the host doesn't have any IPv6 address
 yet, the one it will generate from IPv6-autoconfiguration process is
-guessed from its MAC address and from the switch sub-domain in which
-the it is. It is important to have in mind that if the host uses a
+guessed from its MAC address and from the switch's sub-domain in which
+the host is. It is important to have in mind that if the host uses a
 different way to forge its Global IPv6 address, the controller won't
 recognize it.\\
 \newline
 The bindingList is also extended, indeed if the Router Solicitation
-message is received on an interface nerver used before, as the
-controler just discovers it, it stores the interface in the
+message is received on an interface never used before, as the
+controller just discovers it, it stores the interface in the
 coveredList: now its knowledge of the network topology gets extended
 to local network interfaces and hosts to which they are linked. Then
 as before an IPv6 address is assigned to this new discovered interface
-and the controler has also a convention for local network
+and the controller has also a convention for local network
 interfaces. The 2 bytes prefix of the address depends on the switch,
 indeed switches define sub-domain among the network, but the first
 half-byte of the prefix is always set to 2. Then the last two bytes of
 the address is like before, defined by the interface number among the
-switch. For example is the fourth interface of switch number 7 through
-which the switch is linked to an host, interface's address is 2007::4.
-If the Router Advertisement reaches an already registerd interface,
-nothing described happens on the bindingList.\\
+switch. For example if the fourth interface of the switch number 7
+through is linked to an host, interface's address is 2007::4.  If the
+Router Advertisement reaches an already registered interface, nothing
+happens on the bindingList.\\
 \newline
 This is just after this step that the mobility management is done,
-the controler finds out if the host that has sent the Router
-Solicitation message cames from another sub-network and trigger or
+the controller finds out if the host that has sent the Router
+Solicitation message comes from another sub-network and triggers or
 not mobility management procedure. For the moment we will skip this
-part, considering first a controler that make the network behaves
-normally, without any extra mecanism.\\
+part, considering first a controller that makes the network behave
+normally, without any extra mechanism.\\
 \newline
 Last, the controller forges the ICMPv6 Router Advertisement to be sent
 by the solicited switch to the host that just contacted it, it first
-create the core of the message this way: 
+creates the core of the message this way: 
 
 \begin{lstlisting}[frame=single,language=Python,breaklines=true ] 
 icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT,
@@ -707,20 +851,20 @@ options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400,
 pre_l=14400, prefix=prefix)]))
 \end{lstlisting}
 
-with the variable prefix set to the switch's local network interface
+with the variable 'prefix' set to the switch's local network interface
 IPv6 address to which the host is bound. This packet is then
 encapsulated in a IPv6 packet (with source address set to the local
 scope address of the interface, generated on the fly like MAC
-addresses) and in a ethernet frame and is forwarded to the switch.\\ 
+addresses) and in a Ethernet frame and is forwarded to the switch.\\ 
 \newline
 As we want every Router Solicitation messages to be reported by the
-switches to the controler in order to keep track of hosts moves across
+switches to the controller in order to keep track of hosts moves across
 the network, no flow handling Router Solicitations messages are pushed
-down to the switch but only a ponctual order asking to forward the
+down to the switch but only a punctual order asking to forward the
 provided Router Advertisement message on the specified interface.\\
 \newline
-Here is the associated code of a ponctual order embedding a Router
-Advertisement message (under pck_generated name) sent by the controler
+Here is the associated code of a punctual order embedding a Router
+Advertisement message (under pck\_generated name) sent by the controller
 to the switch (called datapath here):
 
 \begin{lstlisting}[frame=single,language=Python, breaklines=true] 
@@ -733,32 +877,32 @@ datapath.send_msg(out_ra)
 
 The switch will execute the given order in forwarding to the host the
 Router Advertisement message and will keep reporting any Router
-Solicitation messages comming next to the controler.\\
+Solicitation messages coming next to the controller.\\
 
 \subsubsection{Neighbor Solicitation message}
 
 A second kind of ICMPv6 message that can be reported by switches to
 the controller are ICMPv6 Neighbor Solicitation messages, there are
-two reason for an host to send such a message to its local switch. The
+two reasons for an host to send such a message to its local switch. The
 first one is in order to resolve the MAC address associated to a given
 IPv6 address : the target address. In this case the option field of
 the Router Solicitation message is not empty, and the controller
 checks if the target address is one of the virtually assigned
-addresses the solicited switch's interfaces. If yes the controler
+addresses of the solicited switch's interfaces. If yes the controller
 forges the corresponding Neighbor Advertisement message that contains
 the IPv6 address of the spotted interface and transmits it back to the
 switch along a forwarding order for being relayed to the host, exactly
 as for Router Advertisement messages.\\
 \newline
 As several hosts can be connected to the same switch and then get
-configured with the same prefix whereas they are linked through
-different interfaces, the controler also resolves inside domain
-requests : when a Neighbor Solicitation messages received by a switch
-has a target address corresponding to one of another host on the local
-network. Here, as every packet between hosts in the sub-network goes
-through the switch, the packet containing frame built by the sender
-will have its destination MAC address set to the MAC address of the
-switch's interface it is linked to.\\
+configured with the same prefix whereas they are linked to the switch
+through different interfaces, the controller also resolves inside
+domain requests : when a Neighbor Solicitation messages received by a
+switch has a target address corresponding to one of another host on
+the local network. Here, as every packet between hosts in the
+sub-network goes through the switch, the packet containing frame built
+by the sender will have its destination MAC address set to the MAC
+address of the switch's interface it is linked to.\\
 \newline
 If the option field of the Neighbor Solicitation message is null that
 means that it has been sent by the host for address conflict
@@ -770,11 +914,11 @@ Router Solicitation message reception.\\
 As address conflicts are not handled by the controller, if an host
 comes up with a new reconfigured IPv6 address it won't be recognized
 by the switch since this address is not obtained from the usual IPv6
-autoconfiguration process.\\
+auto-configuration process.\\
 \newline
 Router Solicitation and Neighbor Solicitation messages are the only
 two kinds of ICMPv6 control messages handled by the controller, as the
-controler redefines itself the whole backbone addressing plan and as
+controller redefines itself the whole backbone addressing plan and as
 address conflict is not managed there is no need to care about ICMPv6
 Router Advertisement and Neighbor Advertisement Messages.
 
@@ -782,7 +926,7 @@ Router Advertisement and Neighbor Advertisement Messages.
 
 The last kind of message we want to be handled by the controller are
 ICMPv6 Echo messages, they are representing data packets in the
-simulations. \\
+simulation.\\
 When the reception of on ICMPv6 Echo packet is reported
 by a switch to the controller, the controller first looks at packet's
 destination address and behaves according to it.
@@ -797,18 +941,19 @@ localAddressesList = [ self.bindingList[localPort] for localPort in self.binding
 \end{lstlisting}
 
 If the destination address is indeed one belonging to the switch,
-there is two possible scenarios : if the message is an Echo Reply,
+there are two possible scenarios : if the message is an Echo Reply,
 nothing has to be sent back the the network and the controller
 doesn't do anything. If the message is an Echo Request, that means
 that someone is pinging the switch and it has to reply.\\
 \newline
-Exactely as when the controller was ordering the switch to send a
-Router Advertisement or a Neighbor Advertisement message, it first
-constructs the ICMPv6 Echo Reply message and the encapsulating
-packets, and pushes it to the switch along with a punctual forwarding
-order toward the interface the Echo Request was coming from.\\
+Exactly as when the controller was ordering the switch to send a
+Router Advertisement or a Neighbor Advertisement message, the
+controller first constructs the ICMPv6 Echo Reply message and the
+encapsulating packets, and pushes it to the switch along with a
+punctual forwarding order toward the interface the Echo Request was
+coming from.\\
 \newline
-Here we choosed not to push flow to the switch even if it can bother
+Here we chose not to push flows to the switch even if it can bother
 the controller because as ICMPv6 Echo Reply message is constructed from
 the associated Echo Request message it would have been necessary to
 push flows specific to each Echo Request's destination address that
@@ -832,12 +977,12 @@ this case it extracts the last byte of the address where is written
 switch's identifier.\\
 \newline
 Then two cases are possible, either the destination node is an host
-direcly linked to the solicited switch (in this case the extracted
+directly linked to the solicited switch (in this case the extracted
 identifier is the one of the switch itself) and here the controller
 checks if there is an host registered in the coveredHosts list of the
 switch that own Echo message's destination address. If no host is
 found is the list the packet is dropped, but if one is found the
-controller feches host's details from the coveredHosts list that are :
+controller fetches host's details from the coveredHosts list that are :
 host's MAC address and the switch's interface to which it's linked
 to. With all of this the controller has everything he needs to relay
 the echo message toward its destination.\\
@@ -847,14 +992,14 @@ of the switch itself meaning that another switch or an host located in
 a remote local network is aimed by the message. Here the controller
 finds out next hop switch toward the destination : for this purpose is
 uses the structure called networkGraph constructed during the
-initialisation phase and runs on it the breadth-first algorithm to get
-the shortest path beteween the solicited switch and the destination
+initialization phase and runs on it the breadth-first algorithm to get
+the shortest path between the solicited switch and the destination
 switch. From the path, the controller learns which switch is the next
 one to reach the final one. The last step consist in, given a switch
 and one of its direct neighbour, finding the interface of the switch
 that is linked to the neighbor, the function routing() has been
 written for this purpose, the idea is a to scans all the links of the
-network untill finding the one linking the two specified switches and
+network until finding the one linking the two specified switches and
 look on which interface the link is plugged on the switch, here is the
 code:
 
@@ -877,13 +1022,13 @@ address depends on the switch's interface and is computed on the fly
 as previously said, and the destination MAC address is fetched from
 the coveredHost structure if the next hop is an host and if the next
 hop is a switch the routing function is called on this switch in a
-symetrical way to resolve identifiers of the other side interface on
+symmetrical way to resolve identifiers of the other side interface on
 the link, and they its MAC address can be generated.\\
 \newline
 When we reach this point, in every cases all the element needed for
 forwarding has been resolved (MAC addresses and Output interfaces) and
 here for the first time a flow is pushed to the switch from the
-controler instead of punctual order. This flow consists in matching
+controller instead of punctual order. This flow consists in matching
 every next Echo message reaching the switch with the same destination
 address and to forward them toward the interface that has just been
 resolved in changing MAC address with the ones provided, here is the
@@ -900,13 +1045,13 @@ self.add_flow(datapath, 1, match, action,tblId=1)
 
 Now the switch knows how to handle alone this specific kind of message
 and won't forward them anymore to the controller. This is how switches
-get progressively autonomous, by getting instructed at the receiption
+get progressively autonomous, by getting instructed at the reception
 each new Echo message to forward.\\
 \newline
 Now the controller is able to handle switches over a normal network
 that is not requiring any extra services, but our purpose is to handle
 host mobility over the network, then we can imagine that other flows
-will be pushed down to switches so it is necessary to organise flows
+will be pushed down to switches so it is necessary to organize flows
 properly into switches order to avoid any conflict between flows of
 different purposes.
 
@@ -914,7 +1059,7 @@ different purposes.
 
 \subsection{Introduction}
 
-\subsubsection{Flow organisation inside switches}
+\subsubsection{Flow organization inside switches}
 Once pushed to a switch, flows are grouped into ordered tables that
 can be bound together, our controller defines 3 tables insides
 switches : the first one (table number 0) and the last one (table
@@ -926,7 +1071,7 @@ is to forward message to the table number 1.\\
 The table number 1 (the second one) is dedicated to flows related to
 classic message forwarding, like the flows pushed for relaying ICMPv6
 Echo messages. At this point tables 0 and 2 are empty and the second
-one get progressivelly populated witch flow for Echo messages
+one get progressively populated witch flow for Echo messages
 forwarding. For each switch, when a packet is received, it checks if
 it matches one of the entries of the first table, if not it checks if
 it matches one of the entries of the second table. If no match is
@@ -938,7 +1083,7 @@ message with a new destination reaches the switch.
 \subsubsection{Basic idea of how mobility management is done}
 
 Host mobility is ensured first in keeping track of them all around the
-network, by storing and updtating the list of sub-networks each node
+network, by storing and updating the list of sub-networks each node
 has visited. So that when a host gets to a new network, all the old
 ones registered on the list are retrieved and involved in the mobility
 management procedure.
@@ -976,7 +1121,7 @@ communications in which the host is involved, going through the new
 switch. Then, in this case the new switch receives packets coming from
 everywhere in the network and has to forward them on the interface the
 mobile host is now linked to. Since Those communications have been
-started by the host other sub-netoworks, they are made of packets for
+started by the host other sub-networks, they are made of packets for
 which the host address is a previously generated one and the new
 switch doesn't have any ideas of them. Therefore to be able to achieve
 correctly the local forwarding, the switch has find out which are
@@ -988,23 +1133,23 @@ previously IPv6 addresses used by the host and then pushing new flows
 from the controller to the new switch's table number 1 (the table for
 routing purposes) that would match packets whose destination address
 is the ones just resolved and forward them on the interface where the
-host registered. The probleme now is that some packets that doesn't
+host registered. The problem now is that some packets that doesn't
 come from any tunnel may be forwarded to one of the new switch local
-interface instead of being routed normaly tho the switch associated to
+interface instead of being routed normally tho the switch associated to
 their destination address. Therefore those new flows would mess up the
-normal routing procedure and we wan't to keep this very particualer
-local forwarding of remote addresses only for packets comming from
+normal routing procedure and we want to keep this very particular
+local forwarding of remote addresses only for packets coming from
 tunnels and keep other packets out of it.\\
 \newline
 That is why a third flow table is set up inside switches, it contains
 all the flows related to local forwarding of remote address and act as
 described just before. The important point is that flow table can only
-be accessed by messages comming from a tunnel. As host's previous
+be accessed by messages coming from a tunnel. As host's previous
 network are know as well as host MAC address, the controller computes
 the global IPv6 addresses the host has generated when it was in those
 networks, and then pushes flows that match packets having those addresses
 as destination address and forward them to the new switch's interface
-on which the Router Soliciation message has been received.
+on which the Router Solicitation message has been received.
 
 \subsection{Setting up tunnels}
 
@@ -1018,8 +1163,8 @@ tunnel and relays them to the host.\\
 \newline
 In the reverse direction, when the host sends a message with a old IP
 address as source address, this message is tunneled to the switch
-covering the sub-newtork where this old address has been built (no
-route optimization mecanisms are set up). This old switch then extract
+covering the sub-network where this old address has been built (no
+route optimization mechanisms are set up). This old switch then extract
 packets out of the tunnel and forwards them toward their final destination.
 
 \subsubsection{Tunnel properties}
@@ -1030,15 +1175,15 @@ them.\\
 \newline
 Moreover for a given direction, only one tunnel exists between
 two switches and it is shared between hosts, this makes the number of
-flows to push for mibility purposes lower, indeed, the first host that
-goes from a network A to a netork B will trigger the establishment of
+flows to push for mobility purposes lower, indeed, the first host that
+goes from a network A to a network B will trigger the establishment of
 a tunnel between the associated switches and every next host that do
 the same crossing from A to B will have its message going conveyed
 through this same tunnel.\\ 
 \newline
-Tunnels are unidirectionals on the way hosts move, in the sense that
+Tunnels are unidirectional on the way hosts move, in the sense that
 they convey messages (in both directions) to ensure host mobility from
-a network A to another newtork B but if the host goes back to A from B
+a network A to another network B but if the host goes back to A from B
 another tunnel will be used.
 
 \subsubsection{Tunnel related flows}
@@ -1085,7 +1230,7 @@ without VLAN tag.\\
 The second flow matches packets from router A that include a VLAN
 tag set to V, then the associated action consists in first
 stripping the VLAN tag out of packets. Second, as those packets
-have their destination addresse set to the host's old address they
+have their destination address set to the host's old address they
 are then relayed to the flow table number 2 of switch B so that
 the local output interface will be resolved based on the
 destination address of the packets.\\
@@ -1098,12 +1243,12 @@ structure, the controller gets the list of the intermediate switches to
 instruct, and push to each of them two flows : \\
 \newline
 The first one matches packets that include a VLAN tag set to V and
-whose source adress is host's old address, the associated action is
+whose source address is host's old address, the associated action is
 forwarding them in keeping them unchanged (except their MAC
 addresses) to the next hop on the path to reach B.\\
 \newline
 The second one matches packets going in the reverse direction, those
-ones include a VLAN tag set to V and their destination adress is host's
+ones include a VLAN tag set to V and their destination address is host's
 old address, the associated action is forwarding them in keeping them
 unchanged (except their MAC addresses) to the next hop on the path to
 reach A.\\
@@ -1119,7 +1264,7 @@ inside the tunnel. This problem is not fixed today!
 It's important to keep in mind that the mobile host may not only go
 from one network to another but may roam across many different ones
 and also go back to previously visited networks. Therefore the tunnel
-establishement algorithm described before is a trade between having a
+establishment algorithm described before is a trade between having a
 simple sequence of operations to be done by the controller and try not
 to make switches flow table soaring after host have roamed for a
 while, that is why shared tunnel solution has be selected.
@@ -1135,23 +1280,23 @@ another between switch B and switch C, moreover the previously tunnel
 from A to B must not be used anymore.\\
 \newline
  Once installed into a switch a flow can be updated when a new flow
-with the same matching criterias is pushed to this switch, this is
+with the same matching criteria is pushed to this switch, this is
 what happens when the host gets to network C. Before the host joins
 switch C, two tunnel flows are installed into switch A : one ensures
 that every packet aiming the mobile host's old address is forwarded in
-a vlan tunnel toward B, let's call this flow FA1. The other one
-ensures that every packets going from the vlan tunnel is piped to the
+a Vlan tunnel toward B, let's call this flow FA1. The other one
+ensures that every packets going from the Vlan tunnel is piped to the
 routing table, let's call it FA2.\\
 \newline
-When the mobile node reaches network C, a new vlan tunnel is set up
+When the mobile node reaches network C, a new Vlan tunnel is set up
 between switches A and C, FA1 is then updated because a new flow
 matching every packets aiming mobile host's old address forged in
 network A is pushed, and this new flow makes switch A forwards them
-into the new vlan-tunnel toward C, from now switch A doesn't forward
+into the new Vlan-tunnel toward C, from now switch A doesn't forward
 anything more packets related to the considered mobile host in the tunnel
-it shares with swith B (but it still can forward into it packets
+it shares with switch B (but it still can forward into it packets
 related to other mobile hosts). The second new pushed flow matches
-packets based on a new vlan tag, then it doesn't update FA2 as tunnels
+packets based on a new Vlan tag, then it doesn't update FA2 as tunnels
 between A and B and between A and C use different tags. \\
 \newline
 Then switch A has now 3 flows in its flow table number 0 : two of them
@@ -1160,11 +1305,11 @@ for the considered host but still important to handle mobility of
 other mobile nodes that have moved from network A to network B.\\
 \newline
 The two new flows pushed to switch B when the mobile node gets in
-network C are exactely analog to the ones pushed to switch A when the
+network C are exactly analog to the ones pushed to switch A when the
 host moved from network A to network B, but they are associated with
-the new vlan tunnel between switch B and switch C. One of the two
-already existing flows related to the vlan tunnel established with
-switch A, was in charge of forwarding packets caming from the tunnel
+the new Vlan tunnel between switch B and switch C. One of the two
+already existing flows related to the Vlan tunnel established with
+switch A, was in charge of forwarding packets coming from the tunnel
 to switch B's flow table number 2, let's call it FB1. The other one
 was matching packets with the mobile host's old address as source
 address and was sending them into the tunnel, let's call it FB2. As
@@ -1186,11 +1331,11 @@ moves to a new network, n time 4 flows will be pushed with n the
 number of visited networks. Indeed the fact of having simple flow
 pushing algorithm makes the number of OpenFlow messages quite
 important. However, our method doesn't present a great space
-complexity regading to switches flow tables, and especially for the
+complexity regarding to switches flow tables, and especially for the
 first flow table. Indeed as tunnel are shared, among the four flows
 pushed during the first handover between network A and network B, one
-(FA1) is updated, two are still usefull for other mobile hosts (FA2
-and FB2), and only one becomes unused (FB1) untill the mobile node
+(FA1) is updated, two are still useful for other mobile hosts (FA2
+and FB2), and only one becomes unused (FB1) until the mobile node
 goes back to network B.
 
 \subsubsection{Back to a visited network}
@@ -1199,27 +1344,27 @@ If the mobile host, after having visited network C, keeps roaming and
 goes back to network B, the mobility of the the address acquired in
 network A and of the one acquired in network C have to be ensured,
 moreover packets going to the address that the mobile node has forged
-in network B doesn't have to be transfered in a tunnel anymore.\\
+in network B doesn't have to be transferred in a tunnel anymore.\\
 \newline
 First, two flows are pushed to switch A and two others are pushed to
 switch B and as they are exactly the same as the one pushed when the
-host moved first from network A to network B (the vlan tag is still
+host moved first from network A to network B (the Vlan tag is still
 the same), there won't have new flows in switch A and switch B's flow
-table but the flow FA1 will be once again updated and incomming
+table but the flow FA1 will be once again updated and incoming
 packets aiming the host's old address from network A will be
 forwarded to the tunnel toward B.\\
 \newline
 Two other pairs of flow are pushed to switch C and switch B again,
-but as we said tunnel are unidirectionnal in the sense that one
+but as we said tunnel are unidirectional in the sense that one
 tunnel ensure mobility between two switch for a given direction, then
 two more entries are written in both switch B and switch C's flow
 table.\\
 \newline
-Packets going to the address that the mobile node forged into newtork
+Packets going to the address that the mobile node forged into network
 B when it got there for the first time were matched by a flow entry
 that sent them into the tunnel between switch B and switch C. Now
 this flow entry is updated by the controller that pushes a new flow to
-B with the same matching criterias and that forwards packets on the
+B with the same matching criteria and that forwards packets on the
 second flow table of switch B, so that packets going to this specific
 address are forwarded normally by B toward the local interface the
 mobile Host just connects to. \\
@@ -1229,8 +1374,8 @@ flow entries are used again, and then flow table size doesn't become
 very high. As each mobile node is associated to the list of the
 networks that he visited, if it goes back to previous networks,
 several networks can occur multiple time on the list, then in order to
-avoid to push muliple times flows related to the same tunnel during
-the same handover procedure, the controller keeps in memory wich
+avoid to push multiple times flows related to the same tunnel during
+the same handover procedure, the controller keeps in memory which
 tunnel it has already updated in order not to send new flows an
 already updated tunnel.\\
 \newline
@@ -1244,13 +1389,13 @@ clearer the concepts presented in the previous section.
 \subsection{Network topology and simple ping}
 
 \subsubsection{Topology}
-Let's considere a network composed by five switches and six hosts,
-organised according to the following scheme : 
+Let's consider a network composed by five switches and six hosts,
+organized according to the following scheme : 
 **** TODO INSERT NETWORK PLAN AND PROVIDE CODE IN APPENDIX
 
 A mininet script has been written to reproduce this topology, to make
 things clearer the script assign to each switch address that will be
-virtally generated by the controller. It also make the default route
+virtually generated by the controller. It also make the default route
 configuration on hosts easier.\\
 \newline
 Once both mininet and the controller are launched, after few seconds
@@ -1265,7 +1410,7 @@ h10's interface configuration:
 
 
 \subsubsection{Simple Ping}
-To enable hosts to send messages, thay have to be given a default
+To enable hosts to send messages, they have to be given a default
 route, here the local router is the default route.\\
 \newline
 From now hosts are able to ping each other, the first ping messages
@@ -1283,8 +1428,8 @@ pinging h31's IPv6 address :
 
 The first message of this series of ping has triggered flow pushing to
 the second flow table of switches on the path from h10 and to h31, at
-the begining those tables were empty and now they get populated with
-the occurence of new ping messages, here is the content of the flow
+the beginning those tables were empty and now they get populated with
+the occurrence of new ping messages, here is the content of the flow
 tables of s1.
 
 \begin{figure}[h!]
@@ -1312,7 +1457,7 @@ Here are the spoofing instructions:
 \end{figure}
 
 Now, if h2 pings again h1's address, ping messages are still well
-exchanged but now the ttl of the ping response is equal to 59 whearas
+exchanged but now the TTL of the ping response is equal to 59 whereas
 it was equal to 61 before, that means that there is two more hops now
 on the path from h10 to h31's address. With a packet sniffer it is
 possible to see ping messages going from s1 to s3 and then being
@@ -1436,6 +1581,13 @@ phases to load once an instruction file instead of writing them all
 every single time. 
  
 \subsection{fixing the bug}
+When a ping message has to be forwarded by a switch on the same
+interface that it has been received, nothing happen : the flow that
+tell the switch to forward the packet is matched but the output packet
+is not detected by packet sniffer. This problem even occurs when
+packets to forward are modified in getting inserted a Vlan tag in
+their structure. Then tunnel establishement is strongly impacted by
+this bug whose origin is still not known...
 
 \section{Conclusion}
 
@@ -1443,7 +1595,8 @@ every single time.
 what is it doing? limitation? why is it limited?
 
 \subsection{Context, how can it be used in real life}
+...to do...
 \subsection{Personal impressions}
-
+...to do...
 
 \end{document}
