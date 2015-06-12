@@ -1,7 +1,4 @@
-Semester Project : Spring 2015
-SDN assisted DMM
-Project Report, 
-======================================================================
+
 \documentclass{article}
 %\usepackage[left=1in, right=1in]{geometry}
 \usepackage{graphicx}
@@ -9,18 +6,490 @@ Project Report,
 
 \title{Semester Project - SDN assisted DMM }
 \author{Monia Chouaibi- Lucas Croixmarie}
+\setcounter{tocdepth}{2}
 
 \begin{document}
 
+
 \maketitle
+\newpage
+\tableofcontents
+\newpage
+\part{Project Context and Environement}
+
+Mobile communications systems revolutionized the way people
+communicate, joining together communications and mobility. A long way
+in a remarkably short time has been achieved in the history of
+wireless.  Looking past, wireless access technologies have followed
+different evolutionary paths aimed at unified target: performance and
+efficiency in high mobile environment. Nowadays the trend is to
+visualizer the network.\\
+\newline
+In this section we will first understand the mobility management in
+mobile ipv6 then in proxy mobile ipv6. After that ,we will show the
+limitations of those technologies to move to explain the concept of
+distributed mobility management in the SDN context .
+
+
+\section{Mobility Management Standardized solutions}
+
+Internet traffic has increased steeply in recent years, due in great
+part to social platforms and peer-to-peer networks. In addition,
+users' wireless access represents an ever-growing portion of such
+demand, thus posing a paradigm shift in the flow of Internet
+information, for which most deployed architectures are not prepared
+for. This evolution in user traffic demand is tackled by a different
+approach for IP mobility, called Distributed Mobility Management, that
+is focusing on moving the mobility anchors from the core network and
+pushing them closer to the users, at the edge of the network. So,
+let's first focus on the way mobility is treated is mobile ipv6 and
+then in proxy mobile ipv6.
+
+\subsection{Mobile IPv6}
+
+\subsubsection{Principle}
+
+The figure below shows the  network components in mobile ipv6 : 
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure1.png}
+  \caption{Mobile IPv6 general overview}
+\end{figure}
+
+
+let's define each one of them :
+\begin{description}
+  \item[Mobile Node] \hfill \\ 
+A node that can change its point of attachment from one link to
+another, while still being reachable via its home address.
+  \item[Correspondent Node] \hfill \\
+A peer node with which a mobile node is communicating.  The
+correspondent node may be either mobile or stationary.
+  \item[Home Link] \hfill \\ 
+This link is configured with the home subnet prefix and this is where
+the Mobile IPv6 device gets its Home Address.
+  \item[Foreign Link] \hfill \\
+Any link other than the mobile node's home link.
+  \item[Home Agent] \hfill \\ 
+A router on a mobile node's home link with which the mobile node has
+registered its current care-of address.  While the mobile node is away
+from home, the home agent intercepts packets on the home link destined
+to the mobile node's home address, encapsulates them, and tunnels them
+to the mobile node's registered care-of address.
+  \item[Home Address] \hfill \\ 
+A unicast routable address assigned to a mobile node, used as the
+permanent address of the mobile node.  This address is within the
+mobile node's home link.  Standard IP routing mechanisms will deliver
+packets destined for a mobile node's home address to its home link.
+Mobile nodes can have multiple home addresses, for instance, when
+there are multiple home prefixes on the home link.
+  \item[Care-of Address] \hfill \\
+A unicast routable address associated with a mobile node while
+visiting a foreign link the subnet prefix of this IP address is a
+foreign subnet prefix.  Among the multiple care-of addresses that a
+mobile node may have at any given time (e.g., with different subnet
+prefixes), the one registered with the mobile node's home agent for a
+given home address is called its "primary" care-of addres.
+
+\end{description}
+
+
+When a Mobile Node leaves its Home Link and is connected to some
+Foreign Link, the Mobility feature of IPv6 comes into play. After
+getting connected to a Foreign Link, the Mobile Node acquires an IPv6
+address from the Foreign Link. This address is called Care-of
+Address. The Mobile Node sends a binding request to its Home Agent
+with the new Care-of Address. The Home Agent binds the Mobile Node’s
+Home Address with the Care-of Address, establishing a Tunnel between
+both. Whenever a Correspondent Node tries to establish connection with
+the Mobile Node (on its Home Address), the Home Agent intercepts the
+packet and forwards to Mobile Node’s Care-of Address over the Tunnel
+which was already established. The figure below shows the tunnel :
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure2.png}
+  \caption{Tunneling in Mobile IPv6}
+\end{figure}
+
+\subsubsection{Mobile IPv6 vs. Mobile IPv4}
+
+
+The design of Mobile IP support in IPv6 (Mobile IPv6) benefits both
+from the experiences gained from the development of Mobile IP support
+in IPv4 (Mobile IPv4) , and from the opportunities provided by IPv6.
+Mobile IPv6 thus shares many features with Mobile IPv4, but is
+integrated into IPv6 and offers many other improvements. This section
+summarizes the major differences between Mobile IPv4 and Mobile IPv6:\\
+\newline
+Mobile IPv6 operates without any support from local router (deployed
+as a foreign agent ).\\
+\newline
+Security aspect no need to do a pre-arranged
+security associations while moving It is expected that route
+optimization can be deployed on a global scale between all mobile
+nodes and correspondent nodes.\\
+\newline
+In Mobile IPv6 the home agent address discovery mechanism is dynamic
+and returns a single reply to the mobile node. however in IPv4 the
+directed broadcast approach is used and returns separate replies from
+each home agent.\\
+\newline
+Most packets sent to a mobile node while away from home in Mobile IPv6
+are sent using an IPv6 routing header rather than IP encapsulation,
+reducing the amount of resulting overhead compared to Mobile IPv4.
+
+\subsection{Proxy Mobile IPv6}
+
+Proxy Mobile IPv6 (or PMIPv6, or PMIP) is a network-based mobility
+management protocol standardized by IETF and is specified in RFC
+5213. It is a protocol for building a common and access technology
+independent of mobile core networks, accommodating various access
+technologies such as WiMAX, 3GPP, 3GPP2 and WLAN based access
+architectures. Proxy Mobile IPv6 is the only network-based mobility
+management protocol standardized by IETF.
+
+The figure 3 shows an Overview of PMIPv6 architecure: 
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure3.jpg}
+  \caption{PMIPv6 architecture}
+\end{figure}
+
+
+These are some definitions of network components : 
+
+\begin{description}
+  \item[Local Mobility Anchor (LMA)] \hfill \\ 
+it is similar to HA in MIPv6.  It is the topological anchor point for
+the mobile node's home network prefix(es) and is the entity that
+manages the mobile node's binding state. LMA includes a binding cache
+entry for each currently registered MN with MN-Identifier, the MN's
+HNP, a flag indicating the proxy registration and the interface
+identifier of the bidirectional tunnel between the LMA and MAG.
+  \item[Mobile Access Gateway (MAG)] \hfill \\ 
+Mobile Access Gateway is a function on an access router that manages
+the mobility-related signaling for a mobile node that is attached to
+its access link.  It is responsible for tracking the mobile node's
+movements to and from the access link and for signaling the mobile
+node's local mobility anchor.
+\end{description}
+
+The execution of the message flow of the overall operations in PMIPv6
+is show in the figure below:
+
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure4.jpg}
+  \caption{Tunneling messages under PMIPv6}
+\end{figure}
+
+The MN attaches to an access link. the MAG after an authentication
+procedure with a policy server using the MN's profile, which contains
+MN-Identifier, LMA address and other related configuration parameters
+sends to the LMA a Proxy Binding Update (PBU) message on behalf of the
+MN including the MN-Identifier. the LMA by his turn replies with a
+Proxy Binding Acknowledgment (PBA) message including the MN's
+HNP. With this procedure the LMA creates a Binding Cache Entry (BCE)
+for the MN and a bi-directional tunnel between the LMA and the MAG is
+set up Then the MAG sends Router Advertisement message to the MN on
+the access link advertising the MN's HNP as the hosted
+on-link-prefix. On receiving this message, the MN configures its
+interface either using stateful or stateless address configuration
+modes. Finally after obtaining the address configuration in the Proxy
+Mobile IPv6 domain, as the mobile node moves and changes its point of
+attachment from one mobile access gateway to the other, it can still
+continue to use the same address configuration.  As long as the
+attached access link is in the scope of that Proxy Mobile IPv6 domain,
+the mobile node will always detect the same router advertising itself
+as default-router and advertising the mobile node's home network
+prefix(es) on each connected link.
+
+\subsubsection{Limitations of those Techniques}
+
+PMIPv6 and Mobile IPv6 was promising technologies but in the recent
+years user profile has changed , so that finding a solution for
+mobility of MN is one of the most critical criterion of selection in
+the operator perspective . Looking for an alternative resolution is
+due to these facts :
+\begin{itemize}
+
+  \item 
+Inter-domain handover is not supported .When the mobile node moves to
+another PMIPv6 domain the on-going sessions cannot be maintained.
+  \item 
+Centralized mobility management mobility management are simple to be
+implemented because the central anchor can follow the user movements
+by simply re-routing the packets over tunnels created with the access
+router where the mobile node (MN) is currently connected.  But the
+mobility anchor represents a single point of failure, it poses
+scalability issues and can lead to non optimal routing policies.
+  \item  
+handover latency problem.
+  \item  
+Hierarchical architecture of mobile and cellular networks : it forces
+the user traffic to go through all network parts up to the core where
+key entities are deployed to function as border IP gateways and
+mobility anchors.
+\end{itemize}
+
+Distributed mobility management(DMM) propose the inter-domain mobility
+solutions to overcome these limitations. In the following session we
+will introduce these techniques.
+
+\section{DMM Solutions}
+
+\paragraph{Introduction}
+Software-defined networking (SDN) is an approach to computer
+networking that allows network administrators to manage network
+services through abstraction of lower-level functionality. This is
+done by decoupling the system that makes decisions about where traffic
+is sent (the control plan ) from the underlying systems that forward
+traffic to the selected destination (the data plane). The inventors
+and vendors of these systems claim that this simplifies networking.\\
+\newline
+Let's see the architecture of the software defined network then we
+will explain the distributed mobility management combined with this
+solution.
+
+\subsection{SDN general idea and scheme}
+
+\subsubsection{general presentation of SDN concept}
+
+The figure below we can see the architecture of software defined network :
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure5.png}
+  \caption{SDN architecture}
+\end{figure}
+
+SDN decouple the data and the control plan .Actually ,in SDN there is
+three layers :
+
+\begin{description}
+  \item[The infrastructure layer] \hfill \\ 
+SDN don't make restrictions on this layer . Transport of packets from
+the eNB to mobile core network takes place over so called mobile
+backhaul that makes use of all kinds of transmission and packet
+transport technologies such as Ethernet, Carrier Grade Ethernet,
+IP/MPLS and MPLS-TP. The physical layer in the backhaul networks uses
+Fiber,Radio, and copper based links. The physical links are either
+owned by the mobile operator or leased from another operator. An
+incumbent mobile operator may share its infrastructure with different
+types of mobile virtual operators. This approach heps to reduces the
+costs of the radio network to the mobile operator and adds capacity
+for the end user benefit.
+  \item[Control layer] \hfill \\ 
+Mainly we speak here about the SDN controller which is the brain of
+the network . It contains a collection of “pluggable” modules that can
+perform different network tasks. Some of the basic tasks including
+inventorying what devices are within the network and the capabilities
+of each, gathering network statistics, etc. Extensions can be inserted
+that enhance the functionality and support more advanced capabilities,
+such as running algorithms to perform analytics and orchestrating new
+rules throughout the network.
+  \item[Application layer] \hfill \\ 
+
+
+\begin{description}
+  \item[Mobile Backhaul Scaling] 
+Manage and optimize the provision of backhaul connections from the
+base stations to the Access App.  Example :topology discovery, link
+provisioning.
+  \item[Mobility Management] 
+When a mobile device moves the rule in mOFS for the device needs to be
+modified and a new rule may need to be created in the new eOFS. If the
+new eNB is under the same eOFS as the previous one, then it is enough
+to modify an existing rule in the eOFS. We also need to take care of
+balancing the load across the alternative paths between an eNB and a
+particular mOFS. The Mobility Management App chooses the path for a
+device. For the load balancing decision it needs input from network
+Monitoring App.  Example : Cache, MME ,Load balancing
+  \item[Access App]
+It aims to assign the IP address for the mobile device .
+Example : DHCP , DNS, Firewall , Policy
+  \item[Secure Service Delivery App] 
+It helps to secure the process of service delivery and maximally
+benefiting from the economies of scale of cheap switches and generic
+hardware for control processing. The minimum goals of the service
+delivery network are to eliminate all source address spoofing and
+DDoS.
+\end{description}
+
+\end{description}
+
+
+Software-Defined Networking (SDN) is an emerging architecture that is
+dynamic, manageable, cost-effective, and adaptable, making it ideal
+for the high-bandwidth, dynamic nature of today's applications. This
+architecture decouples the network control and forwarding functions
+enabling the network control to become directly programmable and the
+underlying infrastructure to be abstracted for applications and
+network services.  SDN requires some method for the control plane to
+communicate with the data plane. One such mechanism , OpenFlow , is
+often misunderstood to be equivalent to SDN, but other mechanisms
+could also fit into the concept.
+
+
+\subsection{DMM protocol presentation}
+
+\paragraph{Introduction}
+SDN allows allows for quicker provisioning and configuration of
+network connections. SO, network administrators can program the
+behavior of both the traffic and the network in a centralized way,
+without requiring independently accessing and configuring each of the
+networks hardware devices. Also, this simplifies networking as well as
+the deployment of new protocols and applications. In addition, by
+enabling programmability on the traffic and the devices, an SDN
+network might be much more flexible and efficient than a traditional
+one. SDN-DMM based solution exploit these advantages to built a
+promising solution that :\\
+\newline
+Cope with mobile traffic increase.  Distribute Mobility management
+functions to multiple locations.  Serves Mobile node in any of these
+networks by a closest mobility function.
+
+\subsubsection{Components of the architecture}
+
+The main component of the distributed mobility management are :
+
+\paragraph{The network controller}
+It is responsible to configure the nodes in the
+network via a common application programming interface (API), namely
+Southbound API which can be used by an external software application
+to program the forwarding plane of network devices. In our solution,
+it configures the forwarding rules on access routers (the DMM-GWs)
+using OpenFlow 1.3 API
+
+\paragraph{DMM-GWs}
+It's a simple device mainly to forward packets , redirect traffic and
+store some informations\\
+\newline
+the figure below shows the DMM -SDN based solution : 
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure6.png}
+  \caption{DMM component}
+\end{figure}
+
+\subsubsection{Description of message exchanges}
+Upon the MN's attachment to a cMAR, an IPv6 global prefix belonging to
+the MAR's prefix pool is reserved for it (Pref1).  The prefix is sent
+in a PBU with the MN's Identifier (MN-ID) to the CMD, which, since the
+session is new, stores a Binding Cache Entry containing as main fields
+the MN-ID, the MN's prefix and MAR1's address as Proxy-CoA. The CMD
+replies to MAR1 with a PBA indicating that the MN's registration is
+fresh and no past status is available.MAR1 sends a Router
+Advertisement (RA) in unicast to the MN including the prefix reserved
+before, that can be used by the MN to configure an IPv6 address (e.g.,
+with stateless auto-configuration). The address is routable at the
+MAR, in the sense that it is on the path of packets addressed to the
+MN.\\
+\newline
+The figure below explains the whole procedure :
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure7.jpg}
+  \caption{Attachment procedure}
+\end{figure}
+
+let's see now the component of each message : \\
+\newline
+
+\begin{description}
+  \item[MN attached]
+After the Random Access procedure, if the MN is not already attached
+to the network it has to do so by initiating the attach procedure.
+  \item[Router solicitation]
+The mobile node, MN, attaches to MAR which is responsible for
+allocating the MN-HNP,the MAR contains data structure to store the
+association of a network prefix and a mobile interface identifier.
+  \item[MN attachment detection]
+MAR allocates and advertises HNP and updates MN's mobility session up
+to the database.
+  \item[PBU]
+A request message sent by the MAR to the CMD witch contains the MN-ID
+and the HNP prefix .
+  \item[BCE creation]
+Update the cache .It Allocate MN-HNP(s)
+  \item[PBA] 
+A reply message sent by the CMD to a Proxy Binding Update message that
+it received from the MAR .
+  \item[BCE update] 
+Setup BCE and Tunnel
+  \item[Router advertisement] 
+The mobile node can initiate and maintain data transport sessions
+(with CN), using IP addresses derived from HNP, in a standard way
+while it remains attached to MAR.
+\end{description}
+
+
+When a MN is moving away from the area covered by one MAR node and
+entering a new area covered by another MAR, the handover process is
+performed as shown in Figure below and the on going session is
+transferred to the second MAR in order to avoid session termination
+when the MN gets out of the range of the first MAR.\\
+\newline 
+When the MN enters the new MAR domain, initial attachment process is
+performed and the MN gets the new IPv6 address which will be used for
+new communication sessions to be started from now on. In the meantime,
+the on going session keeps using the old IPv6 address that was gotten
+from the previous MAR node that the MN visited when the session
+started.\\
+\newline
+After detecting the approach of the MN, the new MAR allocates a new
+HNP and creates a PBU message that includes the MN\_ID and the
+allocated HNP and sends it to the CMD. When the CMD receives the PBU,
+it uses the MN\_ID as a key to search the BCE table. The matched entry
+is updated and becomes the form of {MN\_ID : (old\_HNP, old\_MAR\_ip)
+  : (new\_HNP, new\_MAR\_ip)}. After updating the BCE entry, the CMD
+replies to the new MAR with the PBA message that contains the
+information about old MARs, {MN\_ID : (old\_HNP, old\_MAR\_ip)}. At
+the same time, The CMD sends to the old MAR the PBU message with the
+information of {MN\_ID : (old\_HNP, new\_MAR\_ip)}.\\
+\newline
+When receiving the PBA message, the new MAR node inserts the
+information of {MN\_ID : (old\_HNP, old\_MAR\_ip)} into the BU(Binding
+Update) list and establishes a tunnel to the old MAR. The entry in the
+BU list is removed when the MN goes far away from the MAR node. In the
+meantime, the old MAR node that is receiving the PBU message from the
+CMD node updates the BCE table entry by using the information of
+{MN\_ID : (old\_HNP, new\_MAR\_ip)} and establishes a tunnel to the
+new MAR and replies to the CMD with the PBA message. \\
+\newline
+This can be shown through this figure :
+
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[scale=0.5]{reportPictures/figure8.jpg}
+  \caption{Tunneling under DMM}
+\end{figure}
+
+
 
 \part{Project tools}
 
+\section{OpenFlow1.3}
 *** TODO matching criterias
 *** TODO action & instructions , priority 
 *** TODO pushing flows vs ponctual orders 
 *** TODO flow gathered in table, table relachionship (general)
-    
+\section{Minet}
+*** TODO quick presentation (from python code) 
+*** TODO advanteges for SDN simulations
+*** TODO user interactions
+\section{Ryu}
+*** TODO quick presentation
+*** TODO comparison with other controller framework
+*** TODO interaction with mininet
+*** TODO available resources
 
 \part{Project Implementation}
 
@@ -43,14 +512,14 @@ are respectively described below.
 
 \subsubsection{Retrieving network backbone's topology}
 
-Ryu controller to access the underlying network topology including
-nodes and the links between them, then it has to be launched with the
-"--observe-link" option. In order to build data structures where
-topology information are stored, the controller uses the LLDP messages
-exchanged between switches when the network is just created. That is
-why this option allows the controller to be aware of all the switches
-of the network and all the links between then but it can't retrieve
-any information about the hosts.\\
+Ryu controller needs to access the underlying network topology
+including nodes and the links between them, then it has to be launched
+with the "--observe-link" option. In order to build data structures
+where topology information are stored, the controller uses the LLDP
+messages exchanged between switches when the network is just
+created. That is why this option allows the controller to be aware of
+all the switches of the network and all the links between then but it
+can't retrieve any information about the hosts.\\
 \newline
 An important point is as we didn't find any way to find out when the
 discovery procedure was done, (ie detecting the instant when the
@@ -68,12 +537,12 @@ is then called once, when the first IPv6 message is submitted by a
 switch to the controller and uses the topology module of Ryu. Mininet
 information are collected this way:
 
-\begin{lstlisting}[frame=single,language=Python] 
-         #All the topology information are obtained from the app_manager
-        appManager = app_manager.RyuApp()
-        #Collecting switches and links information
-        self.switchList = ryu.topology.api.get_all_switch(appManager)
-        self.linkList = ryu.topology.api.get_all_link(appManager)
+\begin{lstlisting}[frame=single,language=Python,breaklines=true] 
+#All the topology information are obtained from the app_manager
+appManager = app_manager.RyuApp()
+#Collecting switches and links information
+self.switchList = ryu.topology.api.get_all_switch(appManager)
+self.linkList = ryu.topology.api.get_all_link(appManager)
 \end{lstlisting}
 
 Two lists : self.switchList and self.linkList are filled up, with
@@ -105,11 +574,11 @@ on the identifier of the switch on the other side of the link.\\
 Here is the code filling up the bindingList structure from the linkList
 and the switchList previously built.
 
-\begin{lstlisting}[frame=single,language=Python] 
-        for link in self.linkList:
-            if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
-                self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
-                self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
+\begin{lstlisting}[frame=single,language=Python,breaklines=true] 
+for link in self.linkList:
+    if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
+        self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
+        self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
 \end{lstlisting}
 
 Mac Addresses are also redifined the same way but as they all are
@@ -117,11 +586,11 @@ generated the same way, they are not stored anywhere but computed on
 the fly every time they are needed. Here is the function that
 construct them:
 
-\begin{lstlisting}[frame=single,language=Python] 
-    #return the MAC address associated to DATAPATH_id and port_id
-    def generateMAC(self, dpid, portid):
-        addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
-        return addMAC
+\begin{lstlisting}[frame=single,language=Python,breaklines=true] 
+#return the MAC address associated to DATAPATH_id and port_id
+def generateMAC(self, dpid, portid):
+    addMAC = 'a6:0'+str(dpid)+':00:00:00:0'+str(portid)
+    return addMAC
 \end{lstlisting}
 
 The way address are forged depend on the interfaces to which they are
@@ -231,12 +700,12 @@ Last, the controller forges the ICMPv6 Router Advertisement to be sent
 by the solicited switch to the host that just contacted it, it first
 create the core of the message this way: 
 
-\begin{lstlisting}[frame=single,language=Python] 
+\begin{lstlisting}[frame=single,language=Python,breaklines=true ] 
 icmp_v6 = icmpv6.icmpv6(type_=icmpv6.ND_ROUTER_ADVERT,
 data=icmpv6.nd_router_advert(ch_l=64, rou_l=4,
 options=[icmpv6.nd_option_pi(length=4, pl=64, res1=7, val_l=86400,
 pre_l=14400, prefix=prefix)]))
-\end{listing}
+\end{lstlisting}
 
 with the variable prefix set to the switch's local network interface
 IPv6 address to which the host is bound. This packet is then
@@ -254,13 +723,13 @@ Here is the associated code of a ponctual order embedding a Router
 Advertisement message (under pck_generated name) sent by the controler
 to the switch (called datapath here):
 
-\begin{lstlisting}[frame=single,language=Python] 
+\begin{lstlisting}[frame=single,language=Python, breaklines=true] 
 actions = [parser.OFPActionOutput(out_port)] 
 out_ra = parser.OFPPacketOut(datapath=datapath,
 buffer_id=ofproto.OFP_NO_BUFFER, in_port=0, actions=actions,
 data=pkt_generated.data) 
 datapath.send_msg(out_ra)
-\end{listing}
+\end{lstlisting}
 
 The switch will execute the given order in forwarding to the host the
 Router Advertisement message and will keep reporting any Router
@@ -323,7 +792,7 @@ Once the controller gets packet's destination address it checks if
 this address belongs to one interface of the solicited switch using
 the bindingList, from which it retrieves switch's interfaces this way:
 
-\begin{lstlisting}[frame=single,language=Python] 
+\begin{lstlisting}[frame=single,language=Python, breaklines=true] 
 localAddressesList = [ self.bindingList[localPort] for localPort in self.bindingList.keys() if localPort[0]==dpid ]
 \end{lstlisting}
 
@@ -389,11 +858,11 @@ network untill finding the one linking the two specified switches and
 look on which interface the link is plugged on the switch, here is the
 code:
 
-\begin{lstlisting}[frame=single,language=Python] 
-    def routing(self, source, dest):
-        for l in self.linkList:
-            if l.src.dpid==source and l.dst.dpid==dest:
-                return l.src.port_no
+\begin{lstlisting}[frame=single,language=Python, breaklines=true] 
+def routing(self, source, dest):
+    for l in self.linkList:
+        if l.src.dpid==source and l.dst.dpid==dest:
+            return l.src.port_no
 \end{lstlisting}
 
 Since this function uses the linkList structure it only works with
@@ -420,7 +889,7 @@ address and to forward them toward the interface that has just been
 resolved in changing MAC address with the ones provided, here is the
 associated code:
 
-\begin{lstlisting}[frame=single,language=Python] 
+\begin{lstlisting}[frame=single,language=Python, breaklines=true] 
 action =
 [parser.OFPActionDecNwTtl(),parser.OFPActionSetField(eth_src=new_mac_src),
 parser.OFPActionSetField(eth_dst=new_mac_dst),parser.OFPActionOutput(outputIntf)
@@ -787,8 +1256,14 @@ configuration on hosts easier.\\
 Once both mininet and the controller are launched, after few seconds
 hosts get configured with global IPv6 addresses, here is a view of
 h10's interface configuration:
-**** TODO insert picture h10_autoconfiguration.png
-     
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/h10_autoconfiguration.png}
+  \caption{Interface configuration of h10}
+\end{figure}
+
+
 \subsubsection{Simple Ping}
 To enable hosts to send messages, thay have to be given a default
 route, here the local router is the default route.\\
@@ -799,14 +1274,24 @@ to switches but once they received all the information from the
 controller, messages are well relayed. Here is an example with h10
 pinging h31's IPv6 address : 
 
-**** TODO insert picture h10_ping_h31.png
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/h10_ping_h31.png}
+  \caption{Ping messages between h10 and h31}
+\end{figure}
+
 
 The first message of this series of ping has triggered flow pushing to
-the second flow table of switches on the path from s10 and to s31, at
+the second flow table of switches on the path from h10 and to h31, at
 the begining those tables were empty and now they get populated with
 the occurence of new ping messages, here is the content of the flow
-tables of s10.
-**** TODO insert s10_dumpflows.png
+tables of s1.
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/s10_dumpflows.png}
+  \caption{Flow tables of s1}
+\end{figure}
 
 At this moment the two other tables are still empty.
 
@@ -820,7 +1305,11 @@ addresses as h31 while h31 is turned off, as h50 presents h31
 identifiers the controller will treat it as if it was h31.
 Here are the spoofing instructions: 
 
-**** TODO insert h50_spoofs_h31.png
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/h50_spoofs_h31.png}
+  \caption{Spoofing instructions}
+\end{figure}
 
 Now, if h2 pings again h1's address, ping messages are still well
 exchanged but now the ttl of the ping response is equal to 59 whearas
@@ -829,19 +1318,34 @@ on the path from h10 to h31's address. With a packet sniffer it is
 possible to see ping messages going from s1 to s3 and then being
 relayed in VLAN tagged packet to s5, h31's address mobility is then
 provided.
-**** TODO insert picture h10_ping_h31spoofed.png
+
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/h10_ping_h31spoofed.png}
+  \caption{ping message between h10 and h50 spoofing h31}
+\end{figure}
+
 
 Ping messages are now received and treated by h50 that now plays the
 role of h31 as we can see from a packet capture on h50's interface:
 
-**** TODO insert picture h50_tcpdump.png
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/h50_tcpdump.png}
+  \caption{Capture of ping messages on h50 interface}
+\end{figure}
 
 Flow tables have been updated, the first flow table of s3 is now
 containing two flows that transfer packets going to h31's address in
 the tunnel toward s5. The first and third flow table of s5 have
 also been populated as we can see:
 
-**** TODO insert s5_dumpflows.png
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/s5_dumpflows.png}
+  \caption{Flow tables of s5}
+\end{figure}
+
 
 \subsubsection{Simulating advanced mobility}
 
@@ -852,7 +1356,12 @@ now through a new tunnel between s3 and s4, and second tunnel is set
 up between s5 and s4, we can retrieve them with the dump of s4 flow
 table:
 
-**** TODO insert s4_dumpflows.png
+\begin{figure}[h!]
+  \centering
+    \includegraphics[trim = 0mm 0mm 237mm 0mm,clip,scale=0.5]{reportPictures/s4_dumpflows.png}
+  \caption{Flow tables of s4}
+\end{figure}
+
 
 When the mobile node moves back under s3 coverage after having
 visited s4 network, flow tables are updates and ping messages are now
@@ -935,5 +1444,6 @@ what is it doing? limitation? why is it limited?
 
 \subsection{Context, how can it be used in real life}
 \subsection{Personal impressions}
+
 
 \end{document}
