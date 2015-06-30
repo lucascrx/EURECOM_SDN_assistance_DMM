@@ -421,6 +421,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         #Creating backbone interfaces and binding them to port and switches
         for link in self.linkList:
             if (link.src.dpid,link.src.port_no) not in self.bindingList and (link.dst.dpid,link.dst.port_no) not in self.bindingList :
+                nbrZerosSrc=3-len(str(link.src.dpid))
+                nbrZerosDst=3-len(str(link.dst.dpid))
                 self.bindingList[link.src.dpid,link.src.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.src.dpid)
                 self.bindingList[link.dst.dpid,link.dst.port_no] = '2000:'+str(link.src.dpid)+str(link.dst.dpid)+'::'+str(link.dst.dpid)
 
